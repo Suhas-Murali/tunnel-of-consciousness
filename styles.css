@@ -1,0 +1,91 @@
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#workspace {
+  display: flex;
+  flex-direction: row;
+  width: 100vw;
+  height: 100vh;
+  position: absolute;
+  top: 0;
+  width: 100%;
+}
+
+#scene-container {
+  flex: 1 1 60%;
+  display: inline-block;
+  position: relative;
+  background: var(--scene-bg, #222);
+  min-width: 0;
+}
+
+#editor-container {
+  flex: 1 1 40%;
+  display: flex;
+  flex-direction: column;
+  background: var(--editor-bg, #181818);
+  min-width: 0;
+}
+
+#color-scheme-switcher {
+  display: none;
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+}
+
+#story-editor {
+  flex: 1;
+  width: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  font-size: 1.1rem;
+  padding: 16px;
+  background: transparent;
+  color: var(--editor-fg, #fff);
+}
+
+#editor-controls {
+  padding: 12px 16px;
+  display: flex;
+  justify-content: flex-end;
+  background: var(--editor-bg, #181818);
+}
+
+.run-button {
+  padding: 10px 20px;
+  font-size: 16px;
+  font-weight: bold;
+  background-color: var(--highlight, #444);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.run-button:hover {
+  background-color: #222;
+}
+
+/* ✅ Timeline scrubber styling for Step 2.1 */
+#timeline-scrubber {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  z-index: 1000;
+}
