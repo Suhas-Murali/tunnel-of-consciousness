@@ -4,37 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tunnel Visualization</title>
-    <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <div id="workspace">
-      <div id="scene-container">
-        <select id="color-scheme-switcher" title="Color Scheme">
-          <option value="monokai">Monokai</option>
-          <option value="desert-oasis">Desert Oasis</option>
-          <option value="iceberg-light">Iceberg Light</option>
-          <option value="cheesecake">Cheesecake</option>
-          <option value="gruvbox-light">Gruvbox Light</option>
-          <option value="blueberry-light">Blueberry Light</option>
-          <option value="darling">Darling</option>
-          <option value="dracula">Dracula</option>
-          <option value="nord">Nord</option>
-          <option value="gruvbox-dark">Gruvbox Dark</option>
-          <option value="paper">Paper</option>
-        </select>
-      </div>
-
-      <div id="editor-container">
-        <textarea id="story-editor" placeholder="Type or paste your story here..."></textarea>
-        <div id="editor-controls">
-          <button id="run-btn" class="run-button">Run Analysis</button>
-
-          <!-- 🆕 Timeline scrubber (added in Phase 3) -->
-          <input type="range" id="timeline-scrubber" min="0" max="1" step="0.001" value="0" disabled />
-        </div>
-      </div>
-    </div>    
-
-    <script type="module" src="/main.js"></script>
+    <div id="root"></div>
+    <script type="module" src="/main.jsx"></script>
   </body>
 </html>

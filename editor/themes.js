@@ -1,5 +1,3 @@
-
-// Color schemes
 export const colorSchemes = {
     'desert-oasis': {
         '--scene-bg': '#f8f5dc',
@@ -68,13 +66,3 @@ export const colorSchemes = {
         sceneBg: 0xf5f5dc
     }
 };
-
-export function applyColorScheme(scheme, tunnelSystem) {
-    const vars = colorSchemes[scheme];
-    for (const key in vars) {
-        if (key.startsWith('--')) {
-        document.documentElement.style.setProperty(key, vars[key]);
-        }
-    }
-    tunnelSystem?.changeColorScheme(vars);
-}

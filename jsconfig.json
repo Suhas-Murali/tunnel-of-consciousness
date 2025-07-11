@@ -1,8 +1,29 @@
 {
-    "compilerOptions": {
-      "paths": {
-        "three/webgpu": ["./node_modules/three/build/three.webgpu.js"],
-        "three/tsl": ["./node_modules/three/build/three.tsl.js"],
-      },
-    }
-  }
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "three/webgpu": ["./node_modules/three/build/three.webgpu.js"],
+      "three/tsl": ["./node_modules/three/build/three.tsl.js"],
+      "three": ["./node_modules/three"],
+      "@react-three/drei": ["./node_modules/@react-three/drei"],
+      "@react-three/fiber": ["./node_modules/@react-three/fiber"],
+      "react": ["./node_modules/react"],
+      "react-dom": ["./node_modules/react-dom"],
+      "react-router-dom": ["./node_modules/react-router-dom"],
+      "@huggingface/inference": ["./node_modules/@huggingface/inference"],
+      "vite": ["./node_modules/vite"],
+      "@vitejs/plugin-react": ["./node_modules/@vitejs/plugin-react"],
+      "tailwindcss": ["./node_modules/tailwindcss"],
+      "autoprefixer": ["./node_modules/autoprefixer"],
+      "postcss": ["./node_modules/postcss"]
+    },
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "./*",
+    "./editor/*",
+    "./nlp/*",
+    "./parser/*",
+    "./visualizer/*"
+  ]
+}

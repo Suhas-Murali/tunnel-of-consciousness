@@ -1,44 +1,104 @@
-import { HfInference } from '@huggingface/inference';
+// Modern NER + Emotion pipeline using HuggingFace API
+const NER_MODEL = 'dbmdz/bert-large-cased-finetuned-conll03-english';
+// Use GoEmotions model for richer emotion detection
+const EMOTION_MODEL = 'SamLowe/roberta-base-go_emotions';
+const API_TOKEN = 'YOUR_API_TOKEN';
 
-const hf = new HfInference('YOUR_HUGGING_FACE_TOKEN'); // Replace with your actual token
-const model = 'j-hartmann/emotion-english-distilroberta-base';
+async function callHuggingFace(model, inputs) {
+  const response = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${API_TOKEN}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ inputs })
+  });
+  if (!response.ok) {
+    throw new Error(`API call failed: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+function normalizeCharacterName(name) {
+  name = name.replace(/\s+/g, ' ').trim();
+  name = name.replace(/^[\p{P}]+|[\p{P}]+$/gu, '');
+  name = name.split(' ').map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()).join(' ');
+  return name;
+}
 
 // Simple color palette
 const palette = [
   '#f54242', '#4287f5', '#42f554', '#f5e142', '#a142f5', '#f57e42', '#42f5e6', '#e642f5', '#f542a7', '#42f5b9', '#b9f542', '#f5b942', '#42b9f5', '#b942f5', '#f54242'
 ];
 
-// List of English pronouns and common non-names to exclude
-const pronounsAndNonNames = [
-  'he', 'him', 'his', 'she', 'her', 'they', 'their', 'them', 'you', 'your', 'i', 'me', 'my', 'mine', 'we', 'us', 'our', 'ours',
-  'it', 'its', 'this', 'that', 'these', 'those', 'who', 'whom', 'whose', 'which', 'what', 'when', 'where', 'why', 'how',
-  'the', 'a', 'an', 'and', 'but', 'or', 'nor', 'for', 'so', 'yet', 'down', 'later', 'then', 'next', 'in', 'on', 'at', 'by', 'with', 'about', 'against', 'between', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'to', 'from', 'up', 'off', 'over', 'under', 'again', 'further', 'once', 'here', 'there', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'can', 'will', 'just', 'don', 'should', 'now', 'their'
-];
-
-const pronounSet = new Set(pronounsAndNonNames.map(w => w.toLowerCase()));
-
-function splitIntoSentences(text) {
-  return text.match(/[^.!?]+[.!?]+/g) || [];
-}
-
-function extractCharacters(sentences) {
-  const names = new Set();
-  for (let s of sentences) {
-    const matches = s.match(/\b[A-Z][a-z]+\b/g);
-    if (matches) matches.forEach(name => {
-      if (!pronounSet.has(name.toLowerCase())) {
-        names.add(name);
-      }
-    });
-  }
-  return Array.from(names);
-}
-
 export async function generateEmotionData(text) {
-  const sentences = splitIntoSentences(text);
-  const realCharacters = extractCharacters(sentences);
+  // Remove demo story override: always use model
+  // Split text into sentences
+  const sentences = text.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 2 && !/^[\s\p{P}]*$/u.test(s));
+  if (sentences.length === 0) {
+    return { characters: {}, scenes: [] };
+  }
+
+  // Caches
+  const nerCache = new Map();
+  const emotionCache = new Map();
+
+  // NER: Detect characters and their mentions
+  const characters = new Set();
+  const characterMentions = new Map();
+  for (let i = 0; i < sentences.length; i++) {
+    const sentence = sentences[i];
+    let ner;
+    if (nerCache.has(sentence)) {
+      ner = nerCache.get(sentence);
+    } else {
+      try {
+        ner = await callHuggingFace(NER_MODEL, sentence);
+        nerCache.set(sentence, ner);
+      } catch (error) {
+        continue;
+      }
+    }
+    let currentName = [];
+    let lastEnd = -1;
+    for (const entity of ner) {
+      if (entity.entity_group === 'PER') {
+        const word = entity.word.trim();
+        if (!word || /^[\s\p{P}]*$/u.test(word)) continue;
+        if (entity.start === lastEnd + 1) {
+          currentName.push(word);
+        } else {
+          if (currentName.length > 0) {
+            const fullName = normalizeCharacterName(currentName.join(' '));
+            if (fullName) {
+              characters.add(fullName);
+              if (!characterMentions.has(fullName)) characterMentions.set(fullName, new Set());
+              characterMentions.get(fullName).add(i);
+            }
+          }
+          currentName = [word];
+        }
+        lastEnd = entity.end;
+      }
+    }
+    if (currentName.length > 0) {
+      const fullName = normalizeCharacterName(currentName.join(' '));
+      if (fullName) {
+        characters.add(fullName);
+        if (!characterMentions.has(fullName)) characterMentions.set(fullName, new Set());
+        characterMentions.get(fullName).add(i);
+      }
+    }
+  }
+
+  // If no characters found, return empty
+  if (characters.size === 0) {
+    return { characters: {}, scenes: [] };
+  }
+
+  // Build emotion data for each character
   const charData = {};
-  realCharacters.forEach((c, i) => {
+  Array.from(characters).forEach((c, i) => {
     charData[c] = {
       color: palette[i % palette.length],
       appearances: [],
@@ -46,62 +106,43 @@ export async function generateEmotionData(text) {
     };
   });
 
-  // Track last mentioned real character for pronoun resolution
-  let lastRealCharacter = null;
-  let sceneId = 1;
-
-  for (let i = 0; i < sentences.length; i++) {
-    const input = sentences[i];
-    let result;
-    try {
-      result = await hf.textClassification({ model, inputs: input });
-    } catch (err) {
-      console.error(`Error during inference for: "${input}"`, err);
-      continue;
-    }
-    if (!Array.isArray(result) || !result[0]?.label) {
-      console.warn("Unexpected result format from Hugging Face:", result);
-      continue;
-    }
-    const emotion = result[0].label.toLowerCase();
-    const score = result[0].score;
-    // Find all real character mentions
-    let found = [];
-    realCharacters.forEach(char => {
-      if (input.includes(char)) found.push(char);
-    });
-    // If a real character is mentioned, update lastRealCharacter
-    if (found.length > 0) {
-      lastRealCharacter = found[found.length - 1];
-    }
-    // Find pronouns in the sentence
-    let pronounFound = false;
-    Object.keys(pronounSet).forEach(pronoun => {
-      const regex = new RegExp(`\\b${pronoun}\\b`, 'i');
-      if (regex.test(input)) {
-        pronounFound = true;
+  for (const character of characters) {
+    const mentionIndices = Array.from(characterMentions.get(character));
+    for (const idx of mentionIndices) {
+      const sentence = sentences[idx];
+      let emotionResult;
+      if (emotionCache.has(sentence)) {
+        emotionResult = emotionCache.get(sentence);
+      } else {
+        try {
+          emotionResult = await callHuggingFace(EMOTION_MODEL, sentence);
+          emotionCache.set(sentence, emotionResult);
+        } catch (error) {
+          continue;
+        }
       }
-    });
-    // If a pronoun is found and we have a last real character, add the data to that character
-    if (pronounFound && lastRealCharacter && !found.includes(lastRealCharacter)) {
-      found.push(lastRealCharacter);
-    }
-    // Only add appearances to real characters
-    found.forEach(char => {
-      if (!charData[char]) return; // Only real characters
-      charData[char].appearances.push({
-        scene: sceneId,
-        position: i / sentences.length,
+      // Use the top emotion (highest score)
+      let top = { label: 'neutral', score: 0 };
+      if (Array.isArray(emotionResult) && emotionResult.length > 0) {
+        // If the result is a list of lists (as in return_all_scores), flatten
+        const flat = Array.isArray(emotionResult[0]) ? emotionResult[0] : emotionResult;
+        top = flat.reduce((a, b) => (b.score > a.score ? b : a), flat[0]);
+      }
+      const emotion = (top.label || 'neutral').toLowerCase();
+      const score = top.score || 0.5;
+      charData[character].appearances.push({
+        scene: 1,
+        position: idx / sentences.length,
         emotion,
-        sentiment: score, // Use score as sentiment for now
-        linkedCharacters: [], // Could extract from text
-        text: input.trim()
+        sentiment: score,
+        linkedCharacters: [],
+        text: sentence
       });
-      charData[char].emotionTimeline.push({
-        position: i / sentences.length,
+      charData[character].emotionTimeline.push({
+        position: idx / sentences.length,
         emotion
       });
-    });
+    }
   }
 
   // Remove characters with no appearances
@@ -113,15 +154,8 @@ export async function generateEmotionData(text) {
 
   // Minimal scenes stub
   const scenes = [
-    {
-      id: 1,
-      title: 'Start',
-      startPosition: 0.0,
-      endPosition: 1.0,
-      characters: Object.keys(charData),
-      dominantEmotion: null,
-      text: ''
-    }
+    { label: 'Start', t: 0.0 },
+    { label: 'End', t: 1.0 }
   ];
 
   return {
