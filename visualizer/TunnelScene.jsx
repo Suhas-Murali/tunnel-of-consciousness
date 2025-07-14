@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
-import { emotionHierarchy } from '../src/emotionHierarchy';
+import { emotionHierarchy } from './emotionHierarchy';
 
 // Place this mapping table immediately after imports
 const EMOTION_LABEL_MAP = {
@@ -76,16 +76,8 @@ const GOEMOTIONS_TO_SECTOR = {
   // fallback
   neutral: 'bad',
 };
-const EMOTION_CHAOS = {
-  calm: 0.0, peaceful: 0.0, content: 0.1, joy: 0.2,
-  happy: 0.2, proud: 0.3, surprised: 0.5, sad: 0.7,
-  fearful: 0.8, angry: 1.0, disgusted: 0.9
-};
 function getEmotionColor(emotion, baseColor) {
   return EMOTION_WHEEL_COLORS[emotion?.toLowerCase?.()] || baseColor;
-}
-function getChaosScore(emotion) {
-  return EMOTION_CHAOS[emotion?.toLowerCase?.()] ?? 0.5;
 }
 
 // Utility: Flatten all tertiary emotions for tunnel segment count
@@ -114,24 +106,17 @@ function Tunnel({ colorScheme }) {
   const numSegments = tertiaryEmotions.length;
   const radius = 3.2; // Match tertiaryRadius
   const tubularSegments = numSegments * 8; // More segments for smoothness
-  // Make tunnel a ring/cylinder
+  // Make tunnel a straight tube along the z axis
   const path = useMemo(() => {
-    const curve = new THREE.CurvePath();
     const points = [];
-    for (let i = 0; i < numSegments; i++) {
-      const angle = (i / numSegments) * 2 * Math.PI;
-      points.push(new THREE.Vector3(
-        Math.cos(angle) * radius,
-        Math.sin(angle) * radius,
-        0
-      ));
+    const length = 100; // Length of the tunnel along z
+    for (let i = 0; i <= numSegments; i++) {
+      const z = (i / numSegments) * -length; // Negative z direction
+      points.push(new THREE.Vector3(0, 0, z));
     }
-    points.push(points[0]); // Close the loop
-    const curve3 = new THREE.CatmullRomCurve3(points, true);
-    curve.add(curve3);
-    return curve;
-  }, [numSegments, radius]);
-  const geometry = useMemo(() => new THREE.TubeGeometry(path, tubularSegments, 0.35, numSegments, true), [path, tubularSegments, numSegments]);
+    return new THREE.CatmullRomCurve3(points, false);
+  }, [numSegments]);
+  const geometry = useMemo(() => new THREE.TubeGeometry(path, tubularSegments, radius, numSegments, false), [path, tubularSegments, numSegments]);
   return (
     <mesh geometry={geometry} position={[0,0,0]}>
       <meshBasicMaterial attach="material" color={0xffffff} side={THREE.DoubleSide} transparent opacity={0.09} depthWrite={false} />
@@ -308,12 +293,13 @@ function EmotionWheelOverlay() {
         distanceFactor={3}
         style={{
           color: core.color,
-          fontWeight: 500,
-          fontSize: '1.05rem',
+          fontWeight: 700, // bolder
+          fontSize: '1.25rem', // larger
           letterSpacing: '0.01em',
           whiteSpace: 'nowrap',
           pointerEvents: 'none',
           userSelect: 'none',
+          textShadow: '0 0 6px #000, 0 0 2px #000', // subtle shadow for contrast
         }}
       >
         {core.core}
@@ -334,12 +320,13 @@ function EmotionWheelOverlay() {
           distanceFactor={3}
           style={{
             color: core.color,
-            fontWeight: 400,
-            fontSize: '0.92rem',
+            fontWeight: 600, // bolder
+            fontSize: '1.05rem', // larger
             letterSpacing: '0.01em',
             whiteSpace: 'nowrap',
             pointerEvents: 'none',
             userSelect: 'none',
+            textShadow: '0 0 5px #000, 0 0 2px #000', // subtle shadow
           }}
         >
           {sec.name}
@@ -360,12 +347,13 @@ function EmotionWheelOverlay() {
             distanceFactor={3}
             style={{
               color: core.color,
-              fontWeight: 300,
-              fontSize: '0.8rem',
+              fontWeight: 500, // bolder
+              fontSize: '0.95rem', // larger
               letterSpacing: '0.01em',
               whiteSpace: 'nowrap',
               pointerEvents: 'none',
               userSelect: 'none',
+              textShadow: '0 0 4px #000, 0 0 1px #000', // subtle shadow
             }}
           >
             {ter}
@@ -490,7 +478,7 @@ function getEmotionRingAndAngle(label) {
   }
 }
 
-function CharacterStrands({ data, viewMode }) {
+function CharacterStrands({ data, viewMode, timeline = 0 }) {
   const { camera, size } = useThree();
   const dotGeometry = useMemo(() => new THREE.SphereGeometry(0.06, 16, 16), []);
 
@@ -509,8 +497,8 @@ function CharacterStrands({ data, viewMode }) {
   // Map: sector -> [charName, charData, originalIndex]
   const sectorMap = {};
   charEntriesSorted.forEach(([charName, charData], idx) => {
-    const timeline = (charData.emotionTimeline || []).sort((a, b) => a.position - b.position);
-    const firstEmotion = timeline[0]?.emotion?.toLowerCase?.();
+    const charTimeline = (charData.emotionTimeline || []).sort((a, b) => a.position - b.position);
+    const firstEmotion = charTimeline[0]?.emotion?.toLowerCase?.();
     const primary = GOEMOTIONS_TO_SECTOR[firstEmotion] || 'bad';
     if (!sectorMap[primary]) sectorMap[primary] = [];
     sectorMap[primary].push([charName, charData, idx]);
@@ -519,12 +507,10 @@ function CharacterStrands({ data, viewMode }) {
   return charEntriesSorted.map(([charName, charData], charIdx) => {
     const points = [];
     const colors = [];
-    const timeline = (charData.emotionTimeline || []).sort((a, b) => a.position - b.position);
-    if (!timeline.length) return null;
-    // Debug: print the raw timeline for this character
-    console.log('Character:', charName, 'Timeline:', timeline);
+    const charTimeline = (charData.emotionTimeline || []).sort((a, b) => a.position - b.position);
+    if (!charTimeline.length) return null;
     // Offset within sector to avoid overlap
-    const firstEmotion = timeline[0]?.emotion?.toLowerCase?.();
+    const firstEmotion = charTimeline[0]?.emotion?.toLowerCase?.();
     const primary = GOEMOTIONS_TO_SECTOR[firstEmotion] || 'bad';
     const charsInSector = sectorMap[primary] || [];
     const mySectorIdx = charsInSector.findIndex(([n]) => n === charName);
@@ -542,22 +528,34 @@ function CharacterStrands({ data, viewMode }) {
     let labelPoint = null;
     if (charIdx === 0) {
       // Start at entrance (core ring, mapped angle of first emotion + offset)
-      const firstMap = getEmotionRingAndAngle(timeline[0]?.emotion);
+      const firstMap = getEmotionRingAndAngle(charTimeline[0]?.emotion);
       if (isNaN(firstMap.angle)) return null;
+      const entranceX = Math.cos(firstMap.angle + offset) * ringRadii.core;
+      const entranceY = Math.sin(firstMap.angle + offset) * ringRadii.core;
+      // First point: entrance
       points.push([
-        Math.cos(firstMap.angle + offset) * ringRadii.core,
-        Math.sin(firstMap.angle + offset) * ringRadii.core,
+        entranceX,
+        entranceY,
         0
       ]);
-      colors.push([1, 1, 1]); // White at entrance
+      const firstColor = new THREE.Color(getEmotionColor(charTimeline[0]?.emotion, charData.color));
+      colors.push([firstColor.r, firstColor.g, firstColor.b]);
+      // Synthetic second point just behind entrance to force tangent backwards
+      points.push([
+        entranceX,
+        entranceY,
+        -0.01
+      ]);
+      colors.push([firstColor.r, firstColor.g, firstColor.b]);
       labelPoint = [
-        Math.cos(firstMap.angle + offset) * ringRadii.core,
-        Math.sin(firstMap.angle + offset) * ringRadii.core,
+        entranceX,
+        entranceY,
         0
       ];
     }
     // For each timeline entry, map to correct ring and angle using the actual emotion label
-    timeline.forEach((entry, i) => {
+    let lastZ = 0;
+    charTimeline.forEach((entry, i) => {
       const emotionLabel = entry.emotion;
       let mappedLabel = EMOTION_LABEL_MAP[emotionLabel?.toLowerCase?.()] || emotionLabel;
       if (!EMOTION_LABEL_MAP[emotionLabel?.toLowerCase?.()] && !findEmotionPath(emotionLabel)) {
@@ -571,7 +569,12 @@ function CharacterStrands({ data, viewMode }) {
       }
       let radius = ringRadii[map.ring] || ringRadii.core;
       const angle = map.angle + offset;
-      const z = -entry.position * 100;
+      let z = -entry.position * 100;
+      // Clamp z to never be greater than the previous z (always flow backwards)
+      if (i > 0 && z > lastZ) {
+        z = lastZ;
+      }
+      lastZ = z;
       points.push([
         Math.cos(angle) * radius,
         Math.sin(angle) * radius,
@@ -587,11 +590,21 @@ function CharacterStrands({ data, viewMode }) {
           z
         ];
       }
-      // Debug log for mapping
-      console.log(`Character: ${charName}, Entry: ${i}, Emotion: ${emotionLabel}, Ring: ${map.ring}, Angle: ${map.angle}`);
+      
     });
     if (points.length < 2) return null;
-    let curve = points.length > 2 ? new THREE.CatmullRomCurve3(points.map(([x, y, z]) => new THREE.Vector3(x, y, z))) : { getPoints: () => points.map(([x, y, z]) => new THREE.Vector3(x, y, z)) };
+    // Ensure z never increases (never protrudes forward)
+    let minZ = points[0][2];
+    for (let i = 1; i < points.length; i++) {
+      if (points[i][2] > minZ) {
+        points[i][2] = minZ;
+      } else {
+        minZ = points[i][2];
+      }
+    }
+    let curve = points.length > 2
+      ? new THREE.CatmullRomCurve3(points.map(([x, y, z]) => new THREE.Vector3(x, y, z)), false, 'centripetal', 1)
+      : { getPoints: () => points.map(([x, y, z]) => new THREE.Vector3(x, y, z)) };
     const curvePoints = curve.getPoints(100).map(v => [v.x, v.y, v.z]);
     // Interpolate colors along the curve
     const vertexColors = [];
@@ -603,35 +616,41 @@ function CharacterStrands({ data, viewMode }) {
       const c = colors[idx] || colors[0] || [1, 1, 1];
       vertexColors.push(c);
     }
-    const dotColor = getEmotionColor(timeline[0]?.emotion, charData.color);
+    const dotColor = getEmotionColor(charTimeline[0]?.emotion, charData.color);
     // Always show label at the start of the strand
     if (!labelPoint) labelPoint = points[0];
-    const vector = new THREE.Vector3(...labelPoint).project(camera);
-    const x = (vector.x + 1) / 2 * size.width;
-    const inCanvas = viewMode === '3d' ? (x >= 0 && x <= size.width * 0.6 && vector.z < 1 && vector.z > -1) : true;
-    // Style for 2D vs 3D
-    const labelStyle = viewMode === '3d' ? {
+    // Consistent label style and size for all views
+    const labelStyle = {
       background: 'rgba(0,0,0,0.7)',
       color: '#fff',
-      padding: '6px 18px',
+      padding: '2px 10px',
       borderRadius: '10px',
       fontWeight: 'bold',
-      fontSize: '1.5rem',
-      whiteSpace: 'nowrap',
-      pointerEvents: 'none',
-      userSelect: 'none',
-    } : {
-      background: 'rgba(0,0,0,0.7)',
-      color: '#fff',
-      padding: '2px 6px',
-      borderRadius: '7px',
-      fontWeight: 'bold',
-      fontSize: '0.85rem',
+      fontSize: '1.1rem',
       whiteSpace: 'nowrap',
       pointerEvents: 'none',
       userSelect: 'none',
     };
-    const distanceFactor = viewMode === '3d' ? 4 : 3;
+    // Always use the same distanceFactor for all views
+    const distanceFactor = 3;
+    // Determine rotation for 2d-side view
+    let labelRotation = [0, 0, 0];
+    if (viewMode === '2d-side') {
+      // Rotate +90 degrees around Y axis to face the camera correctly
+      labelRotation = [0, Math.PI / 2, 0];
+    }
+    // Move sphere and label along the curve according to timeline
+    // Find the closest point on the curve to z = -timeline*100
+    let spherePoint = curvePoints[0];
+    let minDist = Infinity;
+    const targetZ = -timeline * 100;
+    for (let i = 0; i < curvePoints.length; i++) {
+      const dz = Math.abs(curvePoints[i][2] - targetZ);
+      if (dz < minDist) {
+        minDist = dz;
+        spherePoint = curvePoints[i];
+      }
+    }
     return (
       <group key={charName}>
         <ColoredLine
@@ -640,22 +659,18 @@ function CharacterStrands({ data, viewMode }) {
           lineWidth={2}
           opacity={1}
         />
-        <mesh geometry={dotGeometry} position={curvePoints[0]}>
-          <meshBasicMaterial attach="material" color={dotColor} />
+        <mesh geometry={dotGeometry} position={spherePoint}>
+          <meshBasicMaterial attach="material" color={dotColor} depthTest={false} transparent opacity={1} />
         </mesh>
-        <mesh geometry={dotGeometry} position={curvePoints[curvePoints.length - 1]}>
-          <meshBasicMaterial attach="material" color={dotColor} />
-        </mesh>
-        {inCanvas && (
-          <Html
-            position={labelPoint}
-            distanceFactor={distanceFactor}
-            transform={viewMode !== '3d' ? true : false}
-            style={labelStyle}
-          >
-            {charName}
-          </Html>
-        )}
+        <Html
+          position={[spherePoint[0] + 0.13, spherePoint[1] + 0.13, spherePoint[2]]}
+          distanceFactor={distanceFactor}
+          transform
+          style={labelStyle}
+          rotation={labelRotation}
+        >
+          {charName}
+        </Html>
         {/* TODO: Add character label overlays using <Html /> if needed */}
       </group>
     );
@@ -676,7 +691,7 @@ function SceneMarkers({ data }) {
   });
 }
 
-export default function TunnelScene({ data, colorScheme, viewMode }) {
+export default function TunnelScene({ data, colorScheme, viewMode, timeline = 0 }) {
   const { scene, size } = useThree();
   const orthoCamRef = useRef();
   const perspCamRef = useRef();
@@ -759,9 +774,11 @@ export default function TunnelScene({ data, colorScheme, viewMode }) {
       <Tunnel colorScheme={colorScheme} />
       <TunnelLine />
       <Grid />
-      <EmotionWheelOverlay />
-      <CharacterStrands data={data} viewMode={viewMode} />
-      <SceneMarkers data={data} />
+      <group position={[0, 0, -timeline * 100]}>
+        <EmotionWheelOverlay />
+      </group>
+      <CharacterStrands data={data} viewMode={viewMode} timeline={timeline} />
+      {/* <SceneMarkers data={data} /> */}
     </>
   );
 } 

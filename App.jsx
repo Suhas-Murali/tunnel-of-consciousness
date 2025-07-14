@@ -26,7 +26,6 @@ function MainApp() {
       const result = await generateEmotionData(story);
       setData(result);
     } catch (err) {
-      // Optionally handle error
       console.error(err);
       setData(null);
     }
@@ -81,10 +80,9 @@ function MainApp() {
           ))}
         </select>
         <Canvas style={{ width: '100%', height: '100%', background: scheme['--scene-bg'] }}>
-          <TunnelScene data={data} colorScheme={{ sceneBg: scheme['--scene-bg'] }} viewMode={viewMode} />
+          <TunnelScene data={data} colorScheme={{ sceneBg: scheme['--scene-bg'] }} viewMode={viewMode} timeline={timeline} />
         </Canvas>
       </div>
-      {/* Editor Area (40%) */}
       <EditorArea
         story={story}
         setStory={setStory}
@@ -93,6 +91,8 @@ function MainApp() {
         isAnalyzing={isAnalyzing}
         handleRunAnalysis={handleRunAnalysis}
         scheme={scheme}
+        data={data}
+        setData={setData}
       />
     </div>
   );

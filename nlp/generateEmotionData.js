@@ -2,7 +2,7 @@
 const NER_MODEL = 'dbmdz/bert-large-cased-finetuned-conll03-english';
 // Use a model better suited for narrative emotion detection
 const EMOTION_MODEL = 'j-hartmann/emotion-english-distilroberta-base';
-const API_TOKEN = 'your_api_key';
+const API_TOKEN = import.meta.env.VITE_HUGGINGFACE_API_TOKEN;
 
 async function callHuggingFace(model, inputs) {
   const response = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
@@ -32,7 +32,6 @@ const palette = [
 ];
 
 export async function generateEmotionData(text) {
-  // Remove demo story override: always use model
   // Split text into sentences
   const sentences = text.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 2 && !/^[\s\p{P}]*$/u.test(s));
   if (sentences.length === 0) {
@@ -121,8 +120,6 @@ export async function generateEmotionData(text) {
           continue;
         }
       }
-      // Debug: print the raw model output for this sentence
-      console.log('Character:', character, 'Sentence:', sentence, 'Emotion API result:', emotionResult);
       // Use the top emotion (highest score)
       let top = { label: 'neutral', score: 0 };
       if (Array.isArray(emotionResult) && emotionResult.length > 0) {
@@ -130,8 +127,7 @@ export async function generateEmotionData(text) {
         const flat = Array.isArray(emotionResult[0]) ? emotionResult[0] : emotionResult;
         top = flat.reduce((a, b) => (b.score > a.score ? b : a), flat[0]);
       }
-      // Debug: print the top emotion selected
-      console.log('Character:', character, 'Sentence:', sentence, 'Top emotion:', top);
+      
       const emotion = (top.label || 'neutral').toLowerCase();
       const score = top.score || 0.5;
       charData[character].appearances.push({
@@ -161,7 +157,7 @@ export async function generateEmotionData(text) {
     { label: 'Start', t: 0.0 },
     { label: 'End', t: 1.0 }
   ];
-
+  
   return {
     characters: charData,
     scenes
