@@ -487,8 +487,11 @@ function CharacterStrands({ data, viewMode, timeline = 0 }) {
   const ringRadii = EMOTION_WHEEL_RADII;
 
   const charEntries = Object.entries(data.characters);
+  // Filter out hidden characters
+  const visibleCharEntries = charEntries.filter(([charName, charData]) => !charData.hidden);
+  
   // Sort characters by first appearance in the story
-  const charEntriesSorted = charEntries.slice().sort((a, b) => {
+  const charEntriesSorted = visibleCharEntries.slice().sort((a, b) => {
     const aFirst = (a[1].emotionTimeline?.[0]?.position ?? 1);
     const bFirst = (b[1].emotionTimeline?.[0]?.position ?? 1);
     return aFirst - bFirst;
@@ -679,7 +682,9 @@ function CharacterStrands({ data, viewMode, timeline = 0 }) {
 
 function SceneMarkers({ data }) {
   if (!data || !data.scenes) return null;
-  return data.scenes.map((scene, i) => {
+  // Filter out hidden scenes
+  const visibleScenes = data.scenes.filter(scene => !scene.hidden);
+  return visibleScenes.map((scene, i) => {
     const z = -scene.t * 100;
     return (
       <mesh key={i} position={[0, 0, z]}>
