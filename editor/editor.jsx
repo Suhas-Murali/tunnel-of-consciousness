@@ -243,42 +243,89 @@ export default function EditorArea({ story, setStory, timeline, setTimeline, isA
       style={{ flexBasis: '40%', background: scheme['--editor-bg'], maxHeight: '100vh' }}
     >
       {/* Top section: Name, Save, Load, Run Analysis */}
-      <div className="flex flex-row gap-4 p-4 justify-start items-center">
-        <input
-          type="text"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          placeholder="File name..."
-          className="px-3 py-2 rounded-lg bg-neutral-900 text-white border border-neutral-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base font-mono"
-          style={{ background: scheme['--editor-bg'], color: scheme['--editor-fg'], width: 180 }}
-        />
-        <button
-          className="px-4 py-2 font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors shadow border border-blue-700 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
-          onClick={handleSaveToFile}
-          disabled={isAnalyzing || !data}
-        >
-          <FaSave /> Save to File
-        </button>
-        <button
-          className="px-4 py-2 font-bold rounded-lg bg-green-600 text-white hover:bg-green-500 transition-colors shadow border border-green-700 flex items-center gap-2"
-          onClick={() => fileInputRef.current && fileInputRef.current.click()}
-        >
-          <FaFolderOpen /> Load from File
-        </button>
-        <input
-          type="file"
-          accept="application/json"
-          ref={fileInputRef}
-          style={{ display: 'none' }}
-          onChange={handleLoadFromFile}
-        />
-        <button
-          className="px-4 py-2 font-bold rounded-lg bg-neutral-700 text-white hover:bg-neutral-600 transition-colors shadow border border-neutral-600 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
-          onClick={handleRunAnalysis}
-          disabled={isAnalyzing}
-        >
-          <FaPlay /> {isAnalyzing ? 'Analyzing...' : 'Run Analysis'}
-        </button>
+      <div className="px-4 pt-4 pb-2 w-full">
+        {/* xl and up: single row, below xl: two rows */}
+        <div className="hidden 2xl:flex flex-row gap-4 justify-start items-center">
+          <input
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="File name..."
+            className="px-3 py-2 rounded-lg bg-neutral-900 text-white border border-neutral-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base font-mono"
+            style={{ background: scheme['--editor-bg'], color: scheme['--editor-fg'], width: 180 }}
+          />
+          <button
+            className="px-4 py-2 font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors shadow border border-blue-700 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+            onClick={handleSaveToFile}
+            disabled={isAnalyzing || !data}
+          >
+            <FaSave /> Save to File
+          </button>
+          <button
+            className="px-4 py-2 font-bold rounded-lg bg-green-600 text-white hover:bg-green-500 transition-colors shadow border border-green-700 flex items-center gap-2"
+            onClick={() => fileInputRef.current && fileInputRef.current.click()}
+          >
+            <FaFolderOpen /> Load from File
+          </button>
+          <input
+            type="file"
+            accept="application/json"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={handleLoadFromFile}
+          />
+          <button
+            className="px-4 py-2 font-bold rounded-lg bg-neutral-700 text-white hover:bg-neutral-600 transition-colors shadow border border-neutral-600 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2 ml-auto"
+            onClick={handleRunAnalysis}
+            disabled={isAnalyzing}
+          >
+            <FaPlay /> {isAnalyzing ? 'Analyzing...' : 'Run Analysis'}
+          </button>
+        </div>
+        {/* Below xl: two rows */}
+        <div className="flex flex-col gap-2 2xl:hidden w-full">
+          <div className="flex flex-row items-center w-full gap-2">
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="File name..."
+              className="px-3 py-2 rounded-lg bg-neutral-900 text-white border border-neutral-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base font-mono flex-1 h-12"
+              style={{ background: scheme['--editor-bg'], color: scheme['--editor-fg'] }}
+            />
+            <button
+              className="h-12 px-4 rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors shadow border border-blue-700 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center"
+              onClick={handleSaveToFile}
+              disabled={isAnalyzing || !data}
+              title="Save to File"
+            >
+              <FaSave />
+            </button>
+            <button
+              className="h-12 px-4 rounded-lg bg-green-600 text-white hover:bg-green-500 transition-colors shadow border border-green-700 flex items-center justify-center"
+              onClick={() => fileInputRef.current && fileInputRef.current.click()}
+              title="Load from File"
+            >
+              <FaFolderOpen />
+            </button>
+            <input
+              type="file"
+              accept="application/json"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              onChange={handleLoadFromFile}
+            />
+          </div>
+          <div className="flex flex-row w-full justify-end mt-2">
+            <button
+              className="px-4 py-2 font-bold rounded-lg bg-neutral-700 text-white hover:bg-neutral-600 transition-colors shadow border border-neutral-600 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+              onClick={handleRunAnalysis}
+              disabled={isAnalyzing}
+            >
+              <FaPlay /> {isAnalyzing ? 'Analyzing...' : 'Run Analysis'}
+            </button>
+          </div>
+        </div>
       </div>
       {/* Timeline slider with custom styling and scene checkpoints */}
       <div style={{ position: 'relative', width: '75%', margin: '0 auto', marginTop: 8, marginBottom: 16, height: 32 }}>

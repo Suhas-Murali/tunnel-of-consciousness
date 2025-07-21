@@ -294,6 +294,7 @@ function EmotionWheelOverlay() {
         position={[Math.cos(coreAngleMid) * coreRadius, Math.sin(coreAngleMid) * coreRadius, 0.01]}
         transform
         distanceFactor={3}
+        pointerEvents='none'
         style={{
           color: core.color,
           fontWeight: 700, // bolder
@@ -321,6 +322,7 @@ function EmotionWheelOverlay() {
           position={[Math.cos(secAngleMid) * secondaryRadius, Math.sin(secAngleMid) * secondaryRadius, 0.01]}
           transform
           distanceFactor={3}
+          pointerEvents='none'
           style={{
             color: core.color,
             fontWeight: 600, // bolder
@@ -348,6 +350,7 @@ function EmotionWheelOverlay() {
             position={[Math.cos(terAngleMid) * tertiaryRadius, Math.sin(terAngleMid) * tertiaryRadius, 0.01]}
             transform
             distanceFactor={3}
+            pointerEvents='none'
             style={{
               color: core.color,
               fontWeight: 500, // bolder
@@ -669,9 +672,8 @@ function CharacterStrands({ data, viewMode, timeline = 0 }) {
           <meshBasicMaterial attach="material" color={dotColor} depthTest={false} transparent opacity={1} />
         </mesh>
         <Html
-          position={[spherePoint[0] + 0.13, spherePoint[1] + 0.13, spherePoint[2]]}
-          distanceFactor={distanceFactor}
-          transform
+          position={[spherePoint[0] + 0.05, spherePoint[1] + 0.12, spherePoint[2]]}
+          
           style={labelStyle}
           rotation={labelRotation}
         >
@@ -683,16 +685,50 @@ function CharacterStrands({ data, viewMode, timeline = 0 }) {
   });
 }
 
-function SceneMarkers({ data, onSceneSelect }) {
+function SceneMarkers({ data, onSceneSelect, viewMode, timeline }) {
   if (!data || !data.scenes) return null;
   // Filter out hidden scenes
   const visibleScenes = data.scenes.filter(scene => !scene.hidden);
   // Place checkpoints a little to the left (e.g., x = 4.2)
   const checkpointX = 4.2;
+
+  // If in 2d-front view, show the marker for the most recent scene that the timeline has passed
+  if (viewMode === '2d-front') {
+    // Find the scene with the largest t less than or equal to timeline
+    let chosenIdx = 0;
+    for (let i = 0; i < visibleScenes.length; i++) {
+      if (visibleScenes[i].t <= timeline) {
+        chosenIdx = i;
+      } else {
+        break;
+      }
+    }
+    const scene = visibleScenes[chosenIdx];
+    const z = -scene.t * 100;
+    const label = scene.label || `Scene ${chosenIdx + 1}`;
+    const timelineValue = scene.t || (chosenIdx / visibleScenes.length);
+    return (
+      <group key={chosenIdx} position={[checkpointX, 0, z]}>
+        <FlagMesh position={[0, 0, 0]} rotation={[0, 0, 0]} />
+        <Html position={[1, -0.5, 0]} center style={{
+          color: '#fff',
+          fontWeight: 'bold',
+          fontSize: '0.6rem',
+          whiteSpace: 'nowrap',
+          pointerEvents: 'auto',
+          userSelect: 'none',
+          cursor: 'default',
+        }}
+        onClick={() => onSceneSelect && onSceneSelect(timelineValue)}
+        >{label}</Html>
+      </group>
+    );
+  }
+
+  // Otherwise, show all markers but make them non-interactive
   return visibleScenes.map((scene, i) => {
     const z = -scene.t * 100;
     const label = scene.label || `Scene ${i + 1}`;
-    // Compute timeline value for this scene
     const timelineValue = scene.t || (i / visibleScenes.length);
     return (
       <group key={i} position={[checkpointX, 0, z]}>
@@ -702,11 +738,10 @@ function SceneMarkers({ data, onSceneSelect }) {
           fontWeight: 'bold',
           fontSize: '0.6rem',
           whiteSpace: 'nowrap',
-          pointerEvents: 'auto',
+          pointerEvents: 'none',
           userSelect: 'none',
-          cursor: 'pointer',
+          cursor: 'default',
         }}
-        onClick={() => onSceneSelect && onSceneSelect(timelineValue)}
         >{label}</Html>
       </group>
     );
@@ -715,12 +750,12 @@ function SceneMarkers({ data, onSceneSelect }) {
 
 function FlagMesh({ position, rotation, color, label }) {
   // Use useTexture for robust static asset loading
-  const flagTexture = useTexture('/trans.png');
+  const flagTexture = useTexture('/textures/cpflag.png');
   flagTexture.needsUpdate = true;
   return (
     <group position={position} rotation={rotation}>
       <mesh>
-        <planeGeometry args={[1.5, 1.5]} />
+        <planeGeometry args={[1, 1]} />
         <meshBasicMaterial map={flagTexture} side={THREE.DoubleSide} transparent={true} />
       </mesh>
     </group>
@@ -788,14 +823,16 @@ export default function TunnelScene({ data, colorScheme, viewMode, timeline = 0,
   const { scene, size } = useThree();
   const orthoCamRef = useRef();
   const perspCamRef = useRef();
+  const controlsRef = useRef();
   useEffect(() => {
-    if (viewMode === '3d' && perspCamRef.current) {
-      // Always move straight forward into the tunnel, never flip
-      const z = -timeline * 100 + 2;
-      perspCamRef.current.position.set(0, 1, z);
+    if (viewMode === '3d' && perspCamRef.current && controlsRef.current) {
+      const z = -timeline * 100 + 5;
+      perspCamRef.current.position.set(0, 0, z);
       perspCamRef.current.up.set(0, 1, 0);
-      perspCamRef.current.lookAt(0, 1, z - 20);
+      perspCamRef.current.lookAt(0, 0, z - 20);
       perspCamRef.current.updateProjectionMatrix();
+      controlsRef.current.target.set(0, 0, z - 20);
+      controlsRef.current.update();
     }
   }, [timeline, viewMode]);
 
@@ -865,8 +902,8 @@ export default function TunnelScene({ data, colorScheme, viewMode, timeline = 0,
     );
   } else {
     // Default 3D
-    cameraNode = <PerspectiveCamera ref={perspCamRef} makeDefault position={[0, 1, 20]} fov={75} near={0.1} far={1000} />;
-    controlsNode = <OrbitControls makeDefault enableDamping target={[0, 0, -1]} />;
+    cameraNode = <PerspectiveCamera ref={perspCamRef} makeDefault position={[0, 10, 0]} fov={75} near={0.1} far={1000} />;
+    controlsNode = <OrbitControls ref={controlsRef} makeDefault enableDamping target={[0, 0, 0]} />;
   }
 
   return (
@@ -881,7 +918,7 @@ export default function TunnelScene({ data, colorScheme, viewMode, timeline = 0,
         <EmotionWheelOverlay />
       </group>
       <CharacterStrands data={data} viewMode={viewMode} timeline={timeline} />
-      <SceneMarkers data={data} onSceneSelect={onSceneSelect} />
+      <SceneMarkers data={data} onSceneSelect={onSceneSelect} viewMode={viewMode} timeline={timeline} />
     </>
   );
 } 

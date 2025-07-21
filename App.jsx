@@ -17,7 +17,7 @@ function MainApp() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [data, setData] = useState(null);
   const [viewMode, setViewMode] = useState('3d'); // '3d', '2d-front', '2d-side'
-  const [leftWidth, setLeftWidth] = useState(60); // percent
+  const [leftWidth, setLeftWidth] = useState(52); // percent
   const [isDragging, setIsDragging] = useState(false);
 
   // Memoize the current scheme object
