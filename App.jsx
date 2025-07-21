@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
-import TunnelScene from './visualizer/TunnelScene';
+import TunnelScene, { SceneTimelineBar } from './visualizer/TunnelScene';
 import { colorSchemes } from './editor/themes';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import EditorArea from './editor/editor.jsx';
@@ -198,8 +198,9 @@ function MainApp() {
         className="relative flex-shrink-0 min-w-0 h-full"
         style={{ flexBasis: `${leftWidth}%`, width: `${leftWidth}%`, background: scheme['--scene-bg'], transition: isDragging ? 'none' : 'flex-basis 0.2s' }}
       >
+        <SceneTimelineBar data={data} timeline={timeline} onSceneSelect={setTimeline} />
         {/* View mode buttons */}
-        <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 20, display: 'flex', gap: 8 }}>
+        <div style={{ position: 'absolute', bottom: 16, left: 16, zIndex: 20, display: 'flex', gap: 8 }}>
           {viewButtons.filter(b => b.mode !== viewMode).map(b => (
             <button
               key={b.mode}
@@ -242,7 +243,7 @@ function MainApp() {
           </select>
         </div>
         <Canvas style={{ width: '100%', height: '100%', background: scheme['--scene-bg'] }}>
-          <TunnelScene data={data} colorScheme={{ sceneBg: scheme['--scene-bg'] }} viewMode={viewMode} timeline={timeline} />
+          <TunnelScene data={data} colorScheme={{ sceneBg: scheme['--scene-bg'] }} viewMode={viewMode} timeline={timeline} onSceneSelect={setTimeline} />
         </Canvas>
       </div>
       {/* Resizer */}

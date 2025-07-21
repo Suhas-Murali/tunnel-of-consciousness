@@ -1,7 +1,7 @@
 // Modern NER + Emotion pipeline using HuggingFace API
 const NER_MODEL = 'dbmdz/bert-large-cased-finetuned-conll03-english';
 const EMOTION_MODEL = 'j-hartmann/emotion-english-distilroberta-base';
-const API_TOKEN = import.meta.env.VITE_HUGGINGFACE_API_TOKEN;
+const API_TOKEN = "yourapi";
 
 async function callHuggingFace(model, inputs) {
   const response = await fetch(`https://api-inference.huggingface.co/models/${model}`, {

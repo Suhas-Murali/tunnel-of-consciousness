@@ -1,4 +1,4 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { Canvas, useFrame, extend, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, OrthographicCamera, Html, Line } from '@react-three/drei';
 import * as THREE from 'three';
@@ -6,6 +6,9 @@ import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { emotionHierarchy } from './emotionHierarchy';
+import { useLoader } from '@react-three/fiber';
+import { TextureLoader } from 'three';
+import { useTexture } from '@react-three/drei';
 
 // Place this mapping table immediately after imports
 const EMOTION_LABEL_MAP = {
@@ -680,26 +683,121 @@ function CharacterStrands({ data, viewMode, timeline = 0 }) {
   });
 }
 
-function SceneMarkers({ data }) {
+function SceneMarkers({ data, onSceneSelect }) {
   if (!data || !data.scenes) return null;
   // Filter out hidden scenes
   const visibleScenes = data.scenes.filter(scene => !scene.hidden);
+  // Place checkpoints a little to the left (e.g., x = 4.2)
+  const checkpointX = 4.2;
   return visibleScenes.map((scene, i) => {
     const z = -scene.t * 100;
+    const label = scene.label || `Scene ${i + 1}`;
+    // Compute timeline value for this scene
+    const timelineValue = scene.t || (i / visibleScenes.length);
     return (
-      <mesh key={i} position={[0, 0, z]}>
-        <sphereGeometry args={[0.1, 12, 12]} />
-        <meshBasicMaterial color={0xffdd00} />
-        {/* TODO: Add scene label overlays using <Html /> if needed */}
-      </mesh>
+      <group key={i} position={[checkpointX, 0, z]}>
+        <FlagMesh position={[0, 0, 0]} rotation={[0, 0, 0]} />
+        <Html position={[1, -0.5, 0]} center style={{
+          color: '#fff',
+          fontWeight: 'bold',
+          fontSize: '0.6rem',
+          whiteSpace: 'nowrap',
+          pointerEvents: 'auto',
+          userSelect: 'none',
+          cursor: 'pointer',
+        }}
+        onClick={() => onSceneSelect && onSceneSelect(timelineValue)}
+        >{label}</Html>
+      </group>
     );
   });
 }
 
-export default function TunnelScene({ data, colorScheme, viewMode, timeline = 0 }) {
+function FlagMesh({ position, rotation, color, label }) {
+  // Use useTexture for robust static asset loading
+  const flagTexture = useTexture('/trans.png');
+  flagTexture.needsUpdate = true;
+  return (
+    <group position={position} rotation={rotation}>
+      <mesh>
+        <planeGeometry args={[1.5, 1.5]} />
+        <meshBasicMaterial map={flagTexture} side={THREE.DoubleSide} transparent={true} />
+      </mesh>
+    </group>
+  );
+}
+
+// Utility to get dominant emotion for a scene
+function getDominantEmotion(sceneIndex, data) {
+  if (!data || !data.characters) return null;
+  const emotionCounts = {};
+  Object.values(data.characters).forEach(char => {
+    (char.appearances || []).forEach(app => {
+      if (app.scene === sceneIndex) {
+        const e = app.emotion?.toLowerCase();
+        if (e) emotionCounts[e] = (emotionCounts[e] || 0) + 1;
+      }
+    });
+  });
+  let max = 0, dominant = null;
+  for (const [e, count] of Object.entries(emotionCounts)) {
+    if (count > max) { max = count; dominant = e; }
+  }
+  return dominant;
+}
+
+// Color map for emotions
+const EMOTION_COLORS = {
+  happy: '#fff86b', surprised: '#b6a6f7', bad: '#b0e0c6', fearful: '#ffe29a', angry: '#ff7b7b', disgusted: '#bdbdbd', sad: '#7ecbff',
+  // fallback
+  neutral: '#aaa', content: '#f7e96b', proud: '#f7c96b', peaceful: '#e6f7c6', trusting: '#b6e6a6', optimistic: '#ffe29a',
+};
+
+function SceneTimelineBar({ data, timeline, onSceneSelect }) {
+  if (!data || !data.scenes || data.scenes.length < 2) return null;
+  return (
+    <div style={{ width: '100%', height: 32, position: 'absolute', top: 0, left: 0, zIndex: 20, display: 'flex', alignItems: 'center', pointerEvents: 'auto' }}>
+      <div style={{ position: 'relative', width: '90%', margin: '0 auto', height: 8, background: '#222', borderRadius: 6 }}>
+        {data.scenes.map((scene, i) => {
+          const left = `${(scene.t * 100).toFixed(2)}%`;
+          const dominant = getDominantEmotion(i + 1, data) || 'neutral';
+          const color = EMOTION_COLORS[dominant] || '#aaa';
+          return (
+            <div
+              key={i}
+              title={`${scene.label || `Scene ${i + 1}`}: ${dominant}`}
+              onClick={() => onSceneSelect && onSceneSelect(scene.t)}
+              style={{
+                position: 'absolute', left, top: -6, width: 16, height: 16, background: color, borderRadius: '50%', border: '2px solid #fff', cursor: 'pointer', boxShadow: timeline === scene.t ? '0 0 8px 2px #fff' : '',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: 10, color: '#222', zIndex: 2,
+                transform: timeline === scene.t ? 'scale(1.2)' : 'scale(1)', transition: 'transform 0.1s',
+              }}
+            >
+              {i + 1}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export { SceneTimelineBar };
+
+export default function TunnelScene({ data, colorScheme, viewMode, timeline = 0, onSceneSelect }) {
   const { scene, size } = useThree();
   const orthoCamRef = useRef();
   const perspCamRef = useRef();
+  useEffect(() => {
+    if (viewMode === '3d' && perspCamRef.current) {
+      // Always move straight forward into the tunnel, never flip
+      const z = -timeline * 100 + 2;
+      perspCamRef.current.position.set(0, 1, z);
+      perspCamRef.current.up.set(0, 1, 0);
+      perspCamRef.current.lookAt(0, 1, z - 20);
+      perspCamRef.current.updateProjectionMatrix();
+    }
+  }, [timeline, viewMode]);
 
   // Set background color
   React.useEffect(() => {
@@ -767,7 +865,7 @@ export default function TunnelScene({ data, colorScheme, viewMode, timeline = 0 
     );
   } else {
     // Default 3D
-    cameraNode = <PerspectiveCamera ref={perspCamRef} makeDefault position={[0, 1, 5]} fov={75} near={0.1} far={1000} />;
+    cameraNode = <PerspectiveCamera ref={perspCamRef} makeDefault position={[0, 1, 20]} fov={75} near={0.1} far={1000} />;
     controlsNode = <OrbitControls makeDefault enableDamping target={[0, 0, -1]} />;
   }
 
@@ -783,7 +881,7 @@ export default function TunnelScene({ data, colorScheme, viewMode, timeline = 0 
         <EmotionWheelOverlay />
       </group>
       <CharacterStrands data={data} viewMode={viewMode} timeline={timeline} />
-      {/* <SceneMarkers data={data} /> */}
+      <SceneMarkers data={data} onSceneSelect={onSceneSelect} />
     </>
   );
 } 

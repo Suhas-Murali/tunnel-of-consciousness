@@ -418,7 +418,10 @@ export default function EditorArea({ story, setStory, timeline, setTimeline, isA
                 <button
                   key={scene.label || originalIdx}
                   className={`flex items-center px-2 py-2 rounded-lg hover:bg-purple-900/40 transition-colors ${selectedSceneIdx === originalIdx ? 'bg-purple-800/80 font-bold' : ''} ${scene.hidden ? 'opacity-50' : ''}`}
-                  onClick={() => setSelectedSceneIdx(originalIdx)}
+                  onClick={() => {
+                    setSelectedSceneIdx(originalIdx);
+                    if (scene.t !== undefined) setTimeline(scene.t);
+                  }}
                   style={{ color: scheme['--editor-fg'], width: '100%', minWidth: 90, textAlign: 'left' }}
                 >
                   <span style={{ fontWeight: 'bold', fontSize: '1.05em' }}>{`Scene ${originalIdx + 1}`}</span>
@@ -457,7 +460,16 @@ export default function EditorArea({ story, setStory, timeline, setTimeline, isA
                       <button
                         key={char}
                         className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-blue-900/40 transition-colors"
-                        onClick={() => handleSceneCharClick(char)}
+                        onClick={() => {
+                          handleSceneCharClick(char);
+                          // Navigate to the first appearance of this character in the selected scene
+                          const appearances = data.characters[char]?.appearances || [];
+                          const sceneNum = selectedSceneIdx + 1;
+                          const firstInScene = appearances.find(app => app.scene === sceneNum);
+                          if (firstInScene && typeof firstInScene.position === 'number') {
+                            setTimeline(firstInScene.position);
+                          }
+                        }}
                         style={{ borderLeft: `6px solid ${data.characters[char]?.color || '#888'}`, color: scheme['--editor-fg'] }}
                       >
                         <span>{char}</span>
