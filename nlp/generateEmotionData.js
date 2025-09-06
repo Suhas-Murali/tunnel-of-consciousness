@@ -1,17 +1,22 @@
+import { Line } from "@react-three/drei";
+
 // Modern NER + Emotion pipeline using HuggingFace API
-const NER_MODEL = 'dbmdz/bert-large-cased-finetuned-conll03-english';
-const EMOTION_MODEL = 'j-hartmann/emotion-english-distilroberta-base';
+const NER_MODEL = "dbmdz/bert-large-cased-finetuned-conll03-english";
+const EMOTION_MODEL = "j-hartmann/emotion-english-distilroberta-base";
 const API_TOKEN = import.meta.env.VITE_HUGGINGFACE_API_TOKEN;
 
 async function callHuggingFace(model, inputs) {
-  const response = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${API_TOKEN}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ inputs })
-  });
+  const response = await fetch(
+    `https://api-inference.huggingface.co/models/${model}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${API_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ inputs }),
+    }
+  );
   if (!response.ok) {
     throw new Error(`API call failed: ${response.statusText}`);
   }
@@ -19,28 +24,46 @@ async function callHuggingFace(model, inputs) {
 }
 
 function normalizeCharacterName(name) {
-  name = name.replace(/\s+/g, ' ').trim();
-  name = name.replace(/^[\p{P}]+|[\p{P}]+$/gu, '');
-  name = name.split(' ').map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()).join(' ');
+  name = name.replace(/\s+/g, " ").trim();
+  name = name.replace(/^[\p{P}]+|[\p{P}]+$/gu, "");
+  name = name
+    .split(" ")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
   return name;
 }
 
 // Simple color palette
 const palette = [
-  '#f54242', '#4287f5', '#42f554', '#f5e142', '#a142f5', '#f57e42', '#42f5e6', '#e642f5', '#f542a7', '#42f5b9', '#b9f542', '#f5b942', '#42b9f5', '#b942f5', '#f54242'
+  "#f54242",
+  "#4287f5",
+  "#42f554",
+  "#f5e142",
+  "#a142f5",
+  "#f57e42",
+  "#42f5e6",
+  "#e642f5",
+  "#f542a7",
+  "#42f5b9",
+  "#b9f542",
+  "#f5b942",
+  "#42b9f5",
+  "#b942f5",
+  "#f54242",
 ];
 
-export async function generateEmotionData(text, options = {}) {
-  const { sceneHeading = '', allCharacterNames = [] } = options;
+export async function generateEmotionDataOld(text, options = {}) {
+  const { sceneHeading = "", allCharacterNames = [] } = options;
   // Split text into sentences
-  const sentences = text.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 2 && !/^[\s\p{P}]*$/u.test(s));
+  const sentences = text
+    .split(/[.!?]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 2 && !/^[\s\p{P}]*$/u.test(s));
   if (sentences.length === 0) {
     return { characters: {}, scenes: [] };
   }
 
   // Caches
-  const nerCache = new Map();
-  const emotionCache = new Map();
 
   // --- Script Character Name Extraction ---
   // Build a map from sentence index to detected script character name(s)
@@ -49,7 +72,10 @@ export async function generateEmotionData(text, options = {}) {
     for (let i = 0; i < sentences.length; i++) {
       for (const name of allCharacterNames) {
         // Match as a whole word, case-insensitive
-        const regex = new RegExp(`\\b${name.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i');
+        const regex = new RegExp(
+          `\\b${name.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")}\\b`,
+          "i"
+        );
         if (regex.test(sentences[i])) {
           if (!scriptCharMap[i]) scriptCharMap[i] = [];
           scriptCharMap[i].push(name);
@@ -82,14 +108,14 @@ export async function generateEmotionData(text, options = {}) {
       let currentName = [];
       let lastEnd = -1;
       for (const entity of ner) {
-        if (entity.entity_group === 'PER') {
+        if (entity.entity_group === "PER") {
           const word = entity.word.trim();
           if (!word || /^[\s\p{P}]*$/u.test(word)) continue;
           if (entity.start === lastEnd + 1) {
             currentName.push(word);
           } else {
             if (currentName.length > 0) {
-              const fullName = normalizeCharacterName(currentName.join(' '));
+              const fullName = normalizeCharacterName(currentName.join(" "));
               if (fullName.length > 2) usedNames.push(fullName);
             }
             currentName = [word];
@@ -98,7 +124,7 @@ export async function generateEmotionData(text, options = {}) {
         }
       }
       if (currentName.length > 0) {
-        const fullName = normalizeCharacterName(currentName.join(' '));
+        const fullName = normalizeCharacterName(currentName.join(" "));
         if (fullName.length > 2) usedNames.push(fullName);
       }
     }
@@ -117,11 +143,11 @@ export async function generateEmotionData(text, options = {}) {
 
   // Build emotion data for each character
   const charData = {};
-  Array.from(characters).forEach((c, i) => {
+  Array.from(characters).forEach((c) => {
     charData[c] = {
-      color: palette[i % palette.length],
+      color: getRandomColor(),
       appearances: [],
-      emotionTimeline: []
+      emotionTimeline: [],
     };
   });
 
@@ -129,42 +155,27 @@ export async function generateEmotionData(text, options = {}) {
     const mentionIndices = Array.from(characterMentions.get(character));
     for (const idx of mentionIndices) {
       const sentence = sentences[idx];
-      let emotionResult;
-      if (emotionCache.has(sentence)) {
-        emotionResult = emotionCache.get(sentence);
-      } else {
-        try {
-          emotionResult = await callHuggingFace(EMOTION_MODEL, sentence);
-          emotionCache.set(sentence, emotionResult);
-        } catch (error) {
-          continue;
-        }
-      }
-      // Use the top emotion (highest score)
-      let top = { label: 'neutral', score: 0 };
-      if (Array.isArray(emotionResult) && emotionResult.length > 0) {
-        const flat = Array.isArray(emotionResult[0]) ? emotionResult[0] : emotionResult;
-        top = flat.reduce((a, b) => (b.score > a.score ? b : a), flat[0]);
-      }
-      const emotion = (top.label || 'neutral').toLowerCase();
-      const score = top.score || 0.5;
+      const { emotion, score } = await getSentimentScore(
+        sentence,
+        emotionCache
+      );
       charData[character].appearances.push({
         scene: 1,
         position: idx / sentences.length,
         emotion,
         sentiment: score,
         linkedCharacters: [],
-        text: sentence
+        text: sentence,
       });
       charData[character].emotionTimeline.push({
         position: idx / sentences.length,
-        emotion
+        emotion,
       });
     }
   }
 
   // Remove characters with no appearances
-  Object.keys(charData).forEach(char => {
+  Object.keys(charData).forEach((char) => {
     if (charData[char].appearances.length === 0) {
       delete charData[char];
     }
@@ -172,12 +183,124 @@ export async function generateEmotionData(text, options = {}) {
 
   // Minimal scenes stub
   const scenes = [
-    { label: sceneHeading || 'Start', t: 0.0 },
-    { label: 'End', t: 1.0 }
+    { label: sceneHeading || "Start", t: 0.0 },
+    { label: "End", t: 1.0 },
   ];
-  
+
+  sessionStorage.setItem("nerCache", nerCache);
+  sessionStorage.setItem("emotionCache", emotionCache);
+
   return {
     characters: charData,
-    scenes
+    scenes,
+  };
+}
+
+async function getSentimentScore(sentence) {
+  let emotionResult;
+  let top = { label: "neutral", score: 0 };
+  try {
+    emotionResult = await callHuggingFace(EMOTION_MODEL, sentence);
+  } catch (error) {
+    console.error(error);
+    return top;
+  }
+  // Use the top emotion (highest score)
+  if (Array.isArray(emotionResult) && emotionResult.length > 0) {
+    const flat = Array.isArray(emotionResult[0])
+      ? emotionResult[0]
+      : emotionResult;
+    top = flat.reduce((a, b) => (b.score > a.score ? b : a), flat[0]);
+  }
+  const emotion = (top.label || "neutral").toLowerCase();
+  const score = top.score || 0.5;
+  return { emotion, score };
+}
+
+function getRandomColor() {
+  return palette[Math.floor(Math.random() * palette.length)];
+}
+
+export async function generateEmotionData(parsedScript) {
+  const { Lines, Scenes } = parsedScript;
+  const totalLineCount = Lines.length;
+
+  const characters = {};
+  const characterNames = Lines.filter((line) =>
+    line.type.includes("character-name")
+  ).map((line) => line.text);
+  for (const name of characterNames) {
+    characters[name] = {
+      color: getRandomColor(),
+      appearances: [],
+      emotionTimeline: [],
+    };
+  }
+  const scenes = [];
+
+  const addEmotionEntry = async (sentence, character, scene, position) => {
+    const { emotion, score } = await getSentimentScore(sentence);
+    characters[character].appearances.push({
+      scene,
+      position,
+      emotion,
+      sentiment: score,
+      linkedCharacters: [],
+      text: sentence,
+    });
+    characters[character].emotionTimeline.push({
+      position,
+      emotion,
+    });
+  };
+
+  for (let sceneIdx = 0; sceneIdx < Scenes.length; sceneIdx++) {
+    const scene = Scenes[sceneIdx];
+    const sceneStart = scene.start;
+    const sceneEnd = scene.end;
+
+    scenes.push({
+      label: Lines[sceneStart].text,
+      t: sceneStart / totalLineCount,
+    });
+
+    let character = null;
+    let sentence = [];
+    for (let i = sceneStart + 1; i <= sceneEnd; i++) {
+      const line = Lines[i];
+
+      // TODO: Add support for narration and support lines
+      if (line.type.includes("narration") || !line.text) continue;
+
+      if (line.type.includes("directive")) {
+        if (sentence.length != 0 && character != null) {
+          await addEmotionEntry(
+            sentence.join(" "),
+            character,
+            sceneIdx + 1,
+            i / totalLineCount
+          );
+          sentence = [];
+        }
+        if (line.type.includes("character-name")) {
+          character = line.text;
+        }
+        continue;
+      }
+      sentence.push(line.text);
+    }
+    if (sentence.length != 0 && character != null) {
+      await addEmotionEntry(
+        sentence.join(" "),
+        character,
+        sceneIdx + 1,
+        sceneEnd / totalLineCount
+      );
+    }
+  }
+
+  return {
+    characters,
+    scenes,
   };
 }
