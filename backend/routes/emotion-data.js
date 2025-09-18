@@ -1,11 +1,9 @@
-import { Line } from "@react-three/drei";
-
 // Modern NER + Emotion pipeline using HuggingFace API
 const NER_MODEL = "dbmdz/bert-large-cased-finetuned-conll03-english";
 const EMOTION_MODEL = "j-hartmann/emotion-english-distilroberta-base";
-const API_TOKEN = import.meta.env.VITE_HUGGINGFACE_API_TOKEN;
 
 async function callHuggingFace(model, inputs) {
+  const API_TOKEN = process.env.HUGGINGFACE_API_TOKEN;
   const response = await fetch(
     `https://api-inference.huggingface.co/models/${model}`,
     {
@@ -269,8 +267,7 @@ export async function generateEmotionData(parsedScript) {
     for (let i = sceneStart + 1; i <= sceneEnd; i++) {
       const line = Lines[i];
 
-      // TODO: Add support for narration and support lines
-      if (line.type.includes("narration") || !line.text) continue;
+      if (line.type.includes("narration") || !line.text) continue; // Skip empty lines
 
       if (line.type.includes("directive")) {
         if (sentence.length != 0 && character != null) {
