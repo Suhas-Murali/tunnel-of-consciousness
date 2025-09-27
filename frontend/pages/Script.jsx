@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Canvas } from "@react-three/fiber";
-import { FaArrowLeft, FaCube, FaBorderAll, FaColumns } from "react-icons/fa";
+import {  FaSave, FaFolderOpen, FaPlay, FaArrowLeft, FaCube, FaBorderAll, FaColumns } from "react-icons/fa";
 
 import TunnelScene, { SceneTimelineBar } from "../visualizer/TunnelScene";
 import EditorArea from "../editor/editor.jsx";
@@ -14,9 +14,12 @@ import {
 } from "../api";
 
 function ScriptPage() {
+  const fileInputRef = useRef();
+
   const { name } = useParams();
   const navigate = useNavigate();
 
+  const [nameField, setName] = useState(name || 'tunnel-data');
   const [story, setStory] = useState("");
   const [data, setData] = useState(null);
   const [user, setUser] = useState(null);
@@ -132,6 +135,39 @@ function ScriptPage() {
     { mode: "2d-side", label: "Side", icon: <FaColumns /> },
   ];
 
+  // Save to file handler
+  const handleSaveToFile = () => {
+    if (!data) return;
+    const toSave = { ...data, script: story, name: nameField };
+    const blob = new Blob([JSON.stringify(toSave, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${name || 'tunnel-data'}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Load from file handler
+  const handleLoadFromFile = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = evt => {
+      try {
+        const loaded = JSON.parse(evt.target.result);
+        if (loaded.script) setStory(loaded.script);
+        if (loaded.name) setName(loaded.name);
+        setData(loaded);
+      } catch (err) {
+        alert('Invalid file format.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900 text-gray-200">
@@ -157,6 +193,44 @@ function ScriptPage() {
             </Link>
           </h1>
         </div>
+         {/* xl and up: single row, below xl: two rows */}
+                <div className="hidden 2xl:flex flex-row gap-4 justify-start items-center">
+                  <input
+                    type="text"
+                    value={nameField}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="File name..."
+                    className="px-3 py-2 rounded-lg bg-neutral-900 text-white border border-neutral-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base font-mono"
+                    //style={{ background: scheme['--editor-bg'], color: scheme['--editor-fg'], width: 180 }}
+                  />
+                  <button
+                    className="px-4 py-2 font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors shadow border border-blue-700 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+                    onClick={handleSaveToFile}
+                    disabled={isAnalyzing || !data}
+                  >
+                    <FaSave /> Save to File
+                  </button>
+                  <button
+                    className="px-4 py-2 font-bold rounded-lg bg-green-600 text-white hover:bg-green-500 transition-colors shadow border border-green-700 flex items-center gap-2"
+                    onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                  >
+                    <FaFolderOpen /> Load from File
+                  </button>
+                  <input
+                    type="file"
+                    accept="application/json"
+                    ref={fileInputRef}
+                    style={{ display: 'none' }}
+                    onChange={handleLoadFromFile}
+                  />
+                  <button
+                    className="px-4 py-2 font-bold rounded-lg bg-neutral-700 text-white hover:bg-neutral-600 transition-colors shadow border border-neutral-600 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2 ml-auto"
+                    onClick={handleRunAnalysis}
+                    disabled={isAnalyzing}
+                  >
+                    <FaPlay /> {isAnalyzing ? 'Analyzing...' : 'Run Analysis'}
+                  </button>
+                </div>
         <div className="flex items-center gap-4">
           <span className="text-gray-300">{user?.username}</span>
           <button
