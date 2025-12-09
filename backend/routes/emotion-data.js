@@ -21,6 +21,39 @@ async function callHuggingFace(model, inputs) {
   return response.json();
 }
 
+/**
+ * Calls the local python microservice.
+ * @param {'ner' | 'emotion'} task - Which model to run
+ * @param {string} text - The input text
+ */
+async function callLocalService(task, text) {
+  const endpoints = {
+    ner: "http://localhost:8000/ner",
+    emotion: "http://localhost:8000/emotion"
+  };
+
+  if (!endpoints[task]) {
+    throw new Error(`Unknown task: ${task}`);
+  }
+
+  try {
+    const response = await fetch(endpoints[task], {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }), 
+    });
+
+    if (!response.ok) {
+      throw new Error(`Microservice error: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error(`Failed to call ${task} service:`, error);
+    throw error;
+  }
+}
+
 function normalizeCharacterName(name) {
   name = name.replace(/\s+/g, " ").trim();
   name = name.replace(/^[\p{P}]+|[\p{P}]+$/gu, "");
@@ -97,7 +130,8 @@ export async function generateEmotionDataOld(text, options = {}) {
         ner = nerCache.get(sentences[i]);
       } else {
         try {
-          ner = await callHuggingFace(NER_MODEL, sentences[i]);
+          //ner = await callHuggingFace(NER_MODEL, sentences[i]);
+          ner = await callLocalService("ner", sentences[i]);
           nerCache.set(sentences[i], ner);
         } catch (error) {
           continue;
@@ -195,24 +229,27 @@ export async function generateEmotionDataOld(text, options = {}) {
 }
 
 async function getSentimentScore(sentence) {
-  let emotionResult;
+  // Default fallback
   let top = { label: "neutral", score: 0 };
+
   try {
-    emotionResult = await callHuggingFace(EMOTION_MODEL, sentence);
+    const response = await callLocalService("emotion", sentence);
+
+    // Check if 'emotions' exists and has data
+    if (response && Array.isArray(response.emotions) && response.emotions.length > 0) {
+      // Since the Python service already sorts by highest score, 
+      // we can just take the first element.
+      top = response.emotions[0]; 
+    }
   } catch (error) {
-    console.error(error);
-    return top;
+    console.error("Error fetching sentiment:", error);
+    // Returns default 'neutral' on error
   }
-  // Use the top emotion (highest score)
-  if (Array.isArray(emotionResult) && emotionResult.length > 0) {
-    const flat = Array.isArray(emotionResult[0])
-      ? emotionResult[0]
-      : emotionResult;
-    top = flat.reduce((a, b) => (b.score > a.score ? b : a), flat[0]);
-  }
-  const emotion = (top.label || "neutral").toLowerCase();
-  const score = top.score || 0.5;
-  return { emotion, score };
+
+  return {
+    emotion: (top.label || "neutral").toLowerCase(),
+    score: top.score || 0.5,
+  };
 }
 
 function getRandomColor() {
