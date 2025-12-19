@@ -1,7 +1,8 @@
 import React from "react";
 import { Layout, Button, Space, Typography, theme } from "antd";
-import { ArrowLeftOutlined, HomeOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, CodeSandboxOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
+import { logout } from "../../api";
 
 const { Header: AntHeader } = Layout;
 const { Title } = Typography;
@@ -20,7 +21,7 @@ const { Title } = Typography;
  * @param {boolean} sticky - If true, fixes header to top with z-index.
  * @param {object} style - Custom CSS overrides.
  */
-const TOCHeader = ({
+const Header = ({
   backButton = false,
   backButtonAction,
   headerIcon,
@@ -163,4 +164,49 @@ const TOCHeader = ({
   );
 };
 
-export { TOCHeader };
+const HeaderPropsCommon = {
+  backButton: false,
+  headerIcon: <CodeSandboxOutlined />,
+  headerTitle: "Tunnel of Consciousness",
+};
+
+const GetLoginButton = (context) => (
+  <Button type="primary" onClick={() => context.navigate("/auth/login")}>
+    Login
+  </Button>
+);
+
+const GetSignupButton = (context) => (
+  <Button onClick={() => context.navigate("/auth/signup")}>Signup</Button>
+);
+
+const GetLogoutButton = (context) => (
+  <Button
+    onClick={async () => {
+      try {
+        await logout();
+        context.setIsLoggedIn(false);
+        context.navigate("/");
+      } catch (err) {
+        console.error(err);
+      }
+    }}
+  >
+    Logout
+  </Button>
+);
+
+const GetDashboardButton = (context) => (
+  <Button type="primary" onClick={() => context.navigate("/dashboard")}>
+    Dashboard
+  </Button>
+);
+
+export {
+  Header,
+  HeaderPropsCommon,
+  GetSignupButton,
+  GetLoginButton,
+  GetLogoutButton,
+  GetDashboardButton,
+};

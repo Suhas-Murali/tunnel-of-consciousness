@@ -18,12 +18,19 @@ router.post("/parse", async (req, res) => {
 
 router.get("/all", requireAuth, async (req, res) => {
   try {
-    const scripts = await Script.find({ owner: req.user.id }).select("name");
+    const scripts = await Script.find({ owner: req.user.id })
+      .select("name createdAt updatedAt")
+      .sort({ updatedAt: -1 });
 
-    const scriptNames = scripts.map((script) => script.name);
+    const formattedScripts = scripts.map((script) => ({
+      id: script._id,
+      title: script.name,
+      createdAt: script.createdAt,
+      updatedAt: script.updatedAt,
+    }));
 
     res.json({
-      scripts: scriptNames,
+      scripts: formattedScripts,
     });
   } catch (error) {
     console.error("Failed to fetch scripts:", error);
