@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -7,12 +8,38 @@ import {
   matchPath,
   useNavigate,
 } from "react-router-dom";
-import { ConfigProvider, Layout, theme, Spin } from "antd";
+import { ConfigProvider, Layout, theme, Spin, Button, Result } from "antd";
 
 const { Content, Footer } = Layout;
 import { TOC } from "./temp/toc";
 import { getProfile } from "./api";
-import { useState, useEffect } from "react";
+
+const NotFoundPage = () => {
+  const navigate = useNavigate();
+
+  return (
+    <div
+      style={{
+        height: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "transparent",
+      }}
+    >
+      <Result
+        status="404"
+        title="404"
+        subTitle="Sorry, the page you visited does not exist."
+        extra={
+          <Button type="primary" onClick={() => navigate("/")}>
+            Back Home
+          </Button>
+        }
+      />
+    </div>
+  );
+};
 
 const MainLayout = () => {
   const {
@@ -127,7 +154,7 @@ const App = () => {
             <Route path="dashboard" element={<TOC.Dashboard.Page />} />
             {/* <Route path="script/:name" element={<TOC.Dashboard.Page />} /> */}
 
-            <Route path="*" element={<div>404 Not Found</div>} />
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
