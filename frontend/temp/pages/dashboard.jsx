@@ -200,11 +200,13 @@ const Page = () => {
                   display: "flex",
                   flexDirection: "column",
                 }}
-                bodyStyle={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
+                styles={{
+                  body: {
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                  },
                 }}
               >
                 <div>
@@ -368,8 +370,9 @@ const GetHeaderProps = (context) => {
   return {
     ...HeaderPropsCommon,
     headerTitle: "Dashboard",
-    headerIconAction: () => context.navigate("/dashboard"),
+    headerTitleAction: () => {},
     rightItems: [GetLogoutButton(context)],
+    breadcrumbs: true,
   };
 };
 

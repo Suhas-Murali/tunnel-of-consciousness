@@ -14,33 +14,6 @@ const { Content, Footer } = Layout;
 import { TOC } from "./temp/toc";
 import { getProfile } from "./api";
 
-const NotFoundPage = () => {
-  const navigate = useNavigate();
-
-  return (
-    <div
-      style={{
-        height: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "transparent",
-      }}
-    >
-      <Result
-        status="404"
-        title="404"
-        subTitle="Sorry, the page you visited does not exist."
-        extra={
-          <Button type="primary" onClick={() => navigate("/")}>
-            Back Home
-          </Button>
-        }
-      />
-    </div>
-  );
-};
-
 const MainLayout = () => {
   const {
     token: { colorBgContainer, colorBgLayout },
@@ -81,11 +54,9 @@ const MainLayout = () => {
     "/": TOC.Home.GetHeaderProps,
     "/auth/login": TOC.Login.GetHeaderProps,
     "/auth/signup": TOC.Signup.GetHeaderProps,
-    "/dashboard": TOC.Dashboard.GetHeaderProps,
-    // // Dynamic Routes
-    // "/script/:name": {
-    //   ...headerCommon,
-    // },
+    "/script": TOC.Dashboard.GetHeaderProps,
+    "/script/*": TOC.Script.GetHeaderProps,
+    "/notfound": TOC.NotFound.GetHeaderProps,
   };
 
   const getHeaderProps = (pathname) => {
@@ -98,7 +69,7 @@ const MainLayout = () => {
         };
       }
     }
-    return headerConfig["/"](context);
+    return headerConfig["/notfound"](context);
   };
 
   const headerProps = getHeaderProps(location.pathname);
@@ -151,10 +122,13 @@ const App = () => {
               <Route path="signup" element={<TOC.Signup.Page />} />
             </Route>
 
-            <Route path="dashboard" element={<TOC.Dashboard.Page />} />
-            {/* <Route path="script/:name" element={<TOC.Dashboard.Page />} /> */}
+            <Route path="script">
+              <Route index element={<TOC.Dashboard.Page />} />
+              <Route path=":name" element={<TOC.Script.Page />} />
+            </Route>
+            {/* <Route path="profile" element={<TOC.Profile.Page />} /> */}
 
-            <Route path="*" element={<NotFoundPage />} />
+            <Route path="*" element={<TOC.NotFound.Page />} />
           </Route>
         </Routes>
       </BrowserRouter>

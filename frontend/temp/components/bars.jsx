@@ -1,22 +1,62 @@
 import React from "react";
-import { Layout, Button, Space, Typography, theme } from "antd";
+import { Layout, Button, Space, Typography, theme, Breadcrumb } from "antd";
 import { ArrowLeftOutlined, CodeSandboxOutlined } from "@ant-design/icons";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { logout } from "../../api";
 
 const { Header: AntHeader } = Layout;
 const { Title } = Typography;
+
+// Map URL paths to readable names
+const breadcrumbNameMap = {
+  "/dashboard": "Dashboard",
+  "/auth": "Authentication",
+  "/auth/login": "Login",
+  "/auth/signup": "Sign Up",
+  "/script": "Scripts",
+};
+
+const DynamicBreadcrumbs = () => {
+  const location = useLocation();
+
+  const pathSnippets = location.pathname.split("/").filter((i) => i);
+
+  const breadcrumbItems = [
+    {
+      title: <Link to="/">Home</Link>,
+      key: "home",
+    },
+    ...pathSnippets.map((_, index) => {
+      const url = `/${pathSnippets.slice(0, index + 1).join("/")}`;
+      const isId = pathSnippets[index].length > 20;
+      const name =
+        breadcrumbNameMap[url] ||
+        (isId
+          ? "Details"
+          : pathSnippets[index].charAt(0).toUpperCase() +
+            pathSnippets[index].slice(1));
+
+      return {
+        key: url,
+        title: <Link to={url}>{name}</Link>,
+      };
+    }),
+  ];
+
+  return <Breadcrumb items={breadcrumbItems} style={{ margin: "16px 0" }} />;
+};
 
 /**
  * @param {boolean | React.ReactNode} backButton - Show default back button (true) or custom component.
  * @param {function | null} backButtonAction - Function to run on back click. Defaults to navigate(-1).
  * @param {React.ReactNode} headerIcon - Main icon. Pass a component (e.g., <UserOutlined />).
  * @param {function | null} headerIconAction - Function to run on icon click. Defaults to navigate('/').
+ * @param {function | null} headerTitleAction - Function to run on title click. Defaults to navigate('/').
  * @param {string} headerTitle - Title text displayed next to the icon.
  * @param {Array<React.ReactNode>} leftItems - Components to render immediately after the title.
  * @param {Array<React.ReactNode>} centerItems - Components to render in the center of the header.
  * @param {Array<React.ReactNode>} rightItems - Components to render on the far right.
- * @param {React.ReactNode} secondRow - A component to render in a second row (increases height).
+ * @param {boolean | React.ReactNode} breadcrumbs - Show breadcrumbs
  * @param {boolean} hidden - If true, returns null.
  * @param {boolean} sticky - If true, fixes header to top with z-index.
  * @param {object} style - Custom CSS overrides.
@@ -26,11 +66,12 @@ const Header = ({
   backButtonAction,
   headerIcon,
   headerIconAction,
+  headerTitleAction,
   headerTitle,
   leftItems = [],
   centerItems = [],
   rightItems = [],
-  secondRow,
+  breadcrumbs,
   hidden = false,
   sticky = false,
   style = {},
@@ -44,8 +85,9 @@ const Header = ({
 
   const handleBack = backButtonAction || (() => navigate(-1));
   const handleIconClick = headerIconAction || (() => navigate("/"));
+  const handleTitleClick = headerTitleAction || (() => navigate("/"));
 
-  const baseHeight = secondRow ? "auto" : 64;
+  const baseHeight = breadcrumbs ? "auto" : 64;
   const stickyStyle = sticky
     ? { position: "sticky", top: 0, zIndex: 1000, width: "100%" }
     : {};
@@ -102,7 +144,7 @@ const Header = ({
                 alignItems: "center",
                 cursor: "pointer",
               }}
-              onClick={handleIconClick}
+              onClick={handleTitleClick}
             >
               <Typography.Title
                 level={4}
@@ -155,10 +197,11 @@ const Header = ({
         </div>
       </div>
 
-      {secondRow && (
-        <div style={{ paddingBottom: paddingXS, paddingTop: 0 }}>
-          {secondRow}
-        </div>
+      {breadcrumbs && (
+        // <div style={{ paddingBottom: paddingXS, paddingTop: 0 }}>
+        //   {secondRow}
+        // </div>
+        <DynamicBreadcrumbs />
       )}
     </AntHeader>
   );
@@ -197,7 +240,7 @@ const GetLogoutButton = (context) => (
 );
 
 const GetDashboardButton = (context) => (
-  <Button type="primary" onClick={() => context.navigate("/dashboard")}>
+  <Button type="primary" onClick={() => context.navigate("/script")}>
     Dashboard
   </Button>
 );
