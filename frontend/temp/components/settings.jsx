@@ -37,7 +37,6 @@ const ScriptSettings = ({ scriptId, currentUser, onRename, onDelete }) => {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("viewer");
   const [renameValue, setRenameValue] = useState("");
-  console.log("User:", currentUser);
 
   // Refresh data helper
   const loadScriptData = async () => {

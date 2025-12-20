@@ -100,7 +100,7 @@ const EditorToolbar = ({ editor, token }) => {
             onClick={() => editor.chain().focus().toggleStrike().run()}
           />
         </Tooltip>
-        <Divider type="vertical" />
+        <Divider orientation="vertical" />
         <Tooltip title="Undo">
           <Button
             type="text"
@@ -160,7 +160,7 @@ const ScriptEditor = ({ provider }) => {
     <>
       <style>{styles}</style>
       <Card
-        bordered={false}
+        variant="borderless"
         style={{
           height: "100%",
           display: "flex",
@@ -168,7 +168,6 @@ const ScriptEditor = ({ provider }) => {
           overflow: "hidden",
           backgroundColor: token.colorBgContainer,
         }}
-        bodyStyle={cardBodyStyle}
         styles={{ body: cardBodyStyle }}
       >
         <EditorToolbar editor={editor} token={token} />
@@ -189,7 +188,7 @@ const ScriptEditor = ({ provider }) => {
         </div>
 
         {editor && (
-          <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }}>
+          <BubbleMenu editor={editor}>
             <Card size="small" style={{ boxShadow: token.boxShadowSecondary }}>
               <Space size={0}>
                 <Button
