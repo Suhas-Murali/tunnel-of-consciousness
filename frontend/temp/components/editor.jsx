@@ -17,6 +17,7 @@ import * as Y from "yjs";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
+import { CenteredLoader } from "./loader";
 
 // --- CSS styles stay the same as before ---
 const getEditorStyles = (token) => `
@@ -146,10 +147,9 @@ const ScriptEditor = ({ provider }) => {
 
   const styles = getEditorStyles(token);
 
-  // Common body styles for both v4 and v5 Ant Design
   const cardBodyStyle = {
     padding: 0,
-    flex: 1, // FORCE GROW
+    flex: 1,
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",
@@ -168,9 +168,7 @@ const ScriptEditor = ({ provider }) => {
           overflow: "hidden",
           backgroundColor: token.colorBgContainer,
         }}
-        // Support AntD v4
         bodyStyle={cardBodyStyle}
-        // Support AntD v5
         styles={{ body: cardBodyStyle }}
       >
         <EditorToolbar editor={editor} token={token} />
@@ -184,7 +182,6 @@ const ScriptEditor = ({ provider }) => {
           }}
           onClick={() => editor?.commands.focus()}
         >
-          {/* Ensure EditorContent fills the container height */}
           <EditorContent
             editor={editor}
             style={{ minHeight: "100%", height: "100%" }}
@@ -237,7 +234,7 @@ const EditorWindow = ({ documentName }) => {
     };
   }, [documentName]);
 
-  if (!provider || !isSynced) return <div>Loading...</div>;
+  if (!provider || !isSynced) return <CenteredLoader height="100%" />;
 
   return (
     // This wrapper ensures the component takes up all available space

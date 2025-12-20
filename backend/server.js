@@ -65,7 +65,6 @@ const hocuspocusServer = new Server({
   extensions: [
     new Database({
       fetch: async ({ documentName }) => {
-        console.log("fetched", documentName);
         const doc = await Script.findById(documentName);
         return doc ? doc.data : null;
       },

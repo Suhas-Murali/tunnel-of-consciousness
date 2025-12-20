@@ -75,18 +75,7 @@ const MainLayout = () => {
   const headerProps = getHeaderProps(location.pathname);
 
   return isLoading ? (
-    <div
-      style={{
-        height: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: colorBgLayout,
-        zIndex: 9999,
-      }}
-    >
-      <Spin size="large" />
-    </div>
+    <TOC.Loader.CenteredLoader />
   ) : (
     <Layout style={{ minHeight: "100vh", background: colorBgLayout }}>
       <TOC.Header {...headerProps}></TOC.Header>

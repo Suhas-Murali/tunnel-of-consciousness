@@ -5,9 +5,13 @@ import { Login } from "./pages/auth/login";
 import { Dashboard } from "./pages/dashboard";
 import { Script } from "./pages/script";
 import { NotFound } from "./pages/notfound";
+import { CenteredLoader } from "./components/loader";
 
 export const TOC = {
   Header,
+  Loader: {
+    CenteredLoader,
+  },
   Home,
   Signup,
   Login,
