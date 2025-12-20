@@ -45,7 +45,7 @@ const LoginPage = () => {
 
   useEffect(() => {
     if (isLoggedIn) {
-      navigate("/dashboard");
+      navigate("/script");
     }
   }, [isLoggedIn, navigate]);
 
@@ -57,7 +57,7 @@ const LoginPage = () => {
     try {
       await login(email, password);
       setIsLoggedIn(true);
-      navigate("/dashboard");
+      navigate("/script");
     } catch (err) {
       const message =
         err.response?.data?.error ||

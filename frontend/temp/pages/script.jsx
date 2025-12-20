@@ -17,8 +17,17 @@ const ScriptPage = () => {
   }, [isLoggedIn, navigate]);
 
   return (
-    <div style={{ minHeight: "100vh" }}>
-      <Editor documentName={name} />
+    <div
+      style={{
+        height: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        padding: 24,
+      }}
+    >
+      <div style={{ flex: 1, overflow: "hidden" }}>
+        <Editor documentName={name} />
+      </div>
     </div>
   );
 };

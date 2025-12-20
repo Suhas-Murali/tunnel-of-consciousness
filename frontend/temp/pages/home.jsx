@@ -267,6 +267,7 @@ const GetHeaderProps = (context) => {
     rightItems: context.isLoggedIn
       ? [GetDashboardButton(context)]
       : [GetLoginButton(context), GetSignupButton(context)],
+    breadcrumbs: true,
   };
 };
 

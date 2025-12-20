@@ -46,7 +46,7 @@ const SignupPage = () => {
 
   useEffect(() => {
     if (isLoggedIn) {
-      navigate("/dashboard");
+      navigate("/script");
     }
   }, [isLoggedIn, navigate]);
 
@@ -58,7 +58,7 @@ const SignupPage = () => {
     try {
       await register(username, password, email);
       setIsLoggedIn(true);
-      navigate("/dashboard");
+      navigate("/script");
     } catch (err) {
       const message =
         err.response?.data?.error || "Registration failed. Please try again.";
