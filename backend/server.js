@@ -23,42 +23,66 @@ const hocuspocusServer = new Server({
   name: "hocuspocus-script-provider",
   port: PORT,
   onAuthenticate: async ({ context, documentName, connectionConfig }) => {
+    // 1. Verify Token Presence
     if (!context.token) {
       throw new Error("Authentication required");
     }
 
     try {
-      const userId = jwt.verify(context.token, process.env.JWT_SECRET).userId;
+      // 2. Decode User
+      const payload = jwt.verify(context.token, process.env.JWT_SECRET);
+      // Fallback for 'id' vs 'userId' depending on how you signed the token
+      const userId = payload.userId || payload.id;
+
       const user = await User.findById(userId).select("-password");
       if (!user) {
         throw new Error("User Not found");
       }
 
+      // 3. Fetch Script
+      // documentName is the Script ID
       const script = await Script.findById(documentName);
 
       if (!script) {
         throw new Error("Script not found");
       }
 
-      const isOwner = script.owner.toString() === userId;
-      const canWrite = script.writeAccess.some(
-        (id) => id.toString() === userId
-      );
-      const canRead = script.readAccess.some((id) => id.toString() === userId);
+      // 4. NEW SCHEMA LOGIC
+      const currentUserIdStr = userId.toString();
+      const isOwner = script.owner.toString() === currentUserIdStr;
 
-      if (!isOwner && !canWrite && !canRead) {
+      // Check if user is in the collaborators list
+      const collaborator = script.collaborators.find(
+        (c) => c.user.toString() === currentUserIdStr
+      );
+
+      // 5. Access Check
+      // If you are not the owner AND not a collaborator -> Deny Access
+      if (!isOwner && !collaborator) {
         throw new Error("You do not have permission to view this script.");
       }
 
-      if (!isOwner && !canWrite) {
+      // 6. Determine Read-Only Status
+      // You have Write Access if: You are Owner OR you are an 'editor'
+      const canWrite =
+        isOwner || (collaborator && collaborator.role === "editor");
+
+      if (!canWrite) {
         connectionConfig.readOnly = true;
       }
 
+      // 7. Return Context
       return {
-        user,
+        user: {
+          id: user._id.toString(),
+          name: user.username,
+          // Pass color/avatar if you have them, useful for cursors
+          color: "#555",
+        },
       };
     } catch (err) {
       console.log("Auth failed:", err.message);
+      // Hocuspocus catches this error and closes the connection
       throw new Error("Unauthorized");
     }
   },

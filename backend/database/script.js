@@ -2,25 +2,14 @@ import { Schema, model } from "mongoose";
 
 const ScriptSchema = new Schema(
   {
-    owner: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    readAccess: {
-      type: [Schema.Types.ObjectId],
-      ref: "User",
-      default: [],
-    },
-    writeAccess: {
-      type: [Schema.Types.ObjectId],
-      ref: "User",
-      default: [],
-    },
-    name: {
-      type: String,
-      required: true,
-    },
+    name: { type: String, required: true },
+    owner: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    collaborators: [
+      {
+        user: { type: Schema.Types.ObjectId, ref: "User" },
+        role: { type: String, enum: ["viewer", "editor"], default: "viewer" },
+      },
+    ],
     data: {
       type: Buffer,
       required: false,
@@ -28,6 +17,8 @@ const ScriptSchema = new Schema(
   },
   { timestamps: true }
 );
+
+ScriptSchema.index({ owner: 1, name: 1 }, { unique: true });
 
 const Script = model("Script", ScriptSchema);
 

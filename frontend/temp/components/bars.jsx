@@ -228,8 +228,9 @@ const GetLogoutButton = (context) => (
     onClick={async () => {
       try {
         await logout();
-        context.setIsLoggedIn(false);
-        context.navigate("/");
+        await context.checkAuth();
+        context.navigate("/auth/login");
+        window.location.reload();
       } catch (err) {
         console.error(err);
       }

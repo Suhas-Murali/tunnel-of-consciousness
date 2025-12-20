@@ -234,7 +234,9 @@ const EditorWindow = ({ documentName }) => {
     };
   }, [documentName]);
 
-  if (!provider || !isSynced) return <CenteredLoader height="100%" />;
+  if (!provider || !isSynced) {
+    return <CenteredLoader height="100%" />;
+  }
 
   return (
     // This wrapper ensures the component takes up all available space

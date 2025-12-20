@@ -32,7 +32,7 @@ const SignupPage = () => {
 
   const [form] = Form.useForm();
 
-  const { isLoggedIn, setIsLoggedIn } = useOutletContext();
+  const { isLoggedIn, checkAuth } = useOutletContext();
 
   const {
     token: {
@@ -57,7 +57,7 @@ const SignupPage = () => {
 
     try {
       await register(username, password, email);
-      setIsLoggedIn(true);
+      await checkAuth();
       navigate("/script");
     } catch (err) {
       const message =

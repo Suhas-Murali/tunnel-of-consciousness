@@ -16,7 +16,7 @@ const cookieSettings = {
 router.get("/profile", requireAuth, async (req, res) => {
   res.json({
     user: {
-      _id: req.user._id,
+      id: req.user._id,
       username: req.user.username,
       email: req.user.email,
     },

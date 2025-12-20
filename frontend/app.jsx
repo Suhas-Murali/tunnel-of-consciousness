@@ -24,29 +24,30 @@ const MainLayout = () => {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [user, setUser] = useState({});
+  const [user, setUser] = useState(null);
+
+  const checkAuth = async () => {
+    try {
+      setIsLoading(true);
+      const res = await getProfile();
+      setUser(res.data.user);
+      setIsLoggedIn(true);
+    } catch (error) {
+      setUser(null);
+      setIsLoggedIn(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const context = {
     isLoggedIn,
-    setIsLoggedIn,
     user,
     navigate,
+    checkAuth,
   };
 
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        setIsLoading(true);
-        const res = await getProfile();
-        setUser(res.data);
-        console.log(user);
-        setIsLoggedIn(true);
-      } catch (error) {
-        setIsLoggedIn(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
     checkAuth();
   }, []);
 
@@ -81,7 +82,7 @@ const MainLayout = () => {
       <TOC.Header {...headerProps}></TOC.Header>
 
       <Content>
-        <Outlet context={{ isLoggedIn, setIsLoggedIn, user }} />
+        <Outlet context={{ isLoading, isLoggedIn, user, checkAuth }} />
       </Content>
 
       <Footer style={{ textAlign: "center", background: colorBgContainer }}>
@@ -112,8 +113,22 @@ const App = () => {
             </Route>
 
             <Route path="script">
-              <Route index element={<TOC.Dashboard.Page />} />
-              <Route path=":name" element={<TOC.Script.Page />} />
+              <Route
+                index
+                element={
+                  <TOC.AuthenticatedPage>
+                    <TOC.Dashboard.Page />
+                  </TOC.AuthenticatedPage>
+                }
+              />
+              <Route
+                path=":name"
+                element={
+                  <TOC.AuthenticatedPage>
+                    <TOC.Script.Page />
+                  </TOC.AuthenticatedPage>
+                }
+              />
             </Route>
             {/* <Route path="profile" element={<TOC.Profile.Page />} /> */}
 

@@ -17,6 +17,8 @@ import {
   Spin,
   message,
   Popconfirm,
+  Tag,
+  Tooltip,
 } from "antd";
 import {
   PlusOutlined,
@@ -27,53 +29,92 @@ import {
   ClockCircleOutlined,
   DeleteOutlined,
   QuestionCircleOutlined,
+  UserOutlined,
+  TeamOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { GetLogoutButton, HeaderPropsCommon } from "../components/bars";
-import { allScripts } from "../../api";
+import { CenteredLoader } from "../components/loader";
+import { allScripts, createScript, deleteScript } from "../../api";
 
 const { Title, Text } = Typography;
 const { Meta } = Card;
 
 const Page = () => {
   const navigate = useNavigate();
-  const { isLoggedIn } = useOutletContext();
+  const { user } = useOutletContext();
   const { token } = theme.useToken();
-
-  useEffect(() => {
-    if (!isLoggedIn) {
-      navigate("/auth/login");
-    }
-  }, [isLoggedIn, navigate]);
-
   const [loading, setLoading] = useState(true);
   const [scripts, setScripts] = useState([]);
   const [viewMode, setViewMode] = useState("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("updated-desc");
 
+  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newScriptName, setNewScriptName] = useState("");
   const [creating, setCreating] = useState(false);
 
-  useEffect(() => {
-    const fetchScripts = async () => {
-      try {
-        const res = await allScripts();
-        setScripts(res.data.scripts);
-      } catch (err) {
-        console.error(err);
-        message.error("Failed to load scripts.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (isLoggedIn) {
-      fetchScripts();
+  // --- 1. FETCH SCRIPTS ---
+  const fetchScripts = async () => {
+    setLoading(true);
+    try {
+      const res = await allScripts();
+      // The API now returns { scripts: [...] }
+      setScripts(res.data.scripts);
+    } catch (err) {
+      console.error(err);
+      message.error("Failed to load scripts.");
+    } finally {
+      setLoading(false);
     }
-  }, [isLoggedIn]);
+  };
 
+  useEffect(() => {
+    fetchScripts();
+  }, []);
+
+  // --- 2. CREATE SCRIPT ---
+  const handleCreateScript = async () => {
+    if (!newScriptName.trim()) return;
+    setCreating(true);
+    try {
+      // Call API
+      const res = await createScript(newScriptName);
+      const newScript = res.data.script;
+
+      message.success("Script created successfully!");
+      setIsModalOpen(false);
+      setNewScriptName("");
+
+      // Navigate immediately to the new script editor
+      navigate(`/script/${newScript._id}`);
+    } catch (err) {
+      console.error(err);
+      if (err.response && err.response.status === 409) {
+        message.error("A script with this name already exists.");
+      } else {
+        message.error("Failed to create script. Please try again.");
+      }
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // --- 3. DELETE SCRIPT ---
+  const handleDeleteScript = async (id) => {
+    try {
+      await deleteScript(id);
+      message.success("Script deleted.");
+      // Optimistically remove from UI
+      setScripts((prev) => prev.filter((s) => s.id !== id));
+    } catch (err) {
+      console.error(err);
+      message.error("Failed to delete script. You might not be the owner.");
+    }
+  };
+
+  // --- UTILS ---
   const formatDate = (isoString) => {
     if (!isoString) return "N/A";
     return new Date(isoString).toLocaleDateString(undefined, {
@@ -83,6 +124,13 @@ const Page = () => {
     });
   };
 
+  const getPermissionIcon = (role) => {
+    if (role === "owner") return <UserOutlined />;
+    if (role === "editor") return <FileTextOutlined />;
+    return <TeamOutlined />;
+  };
+
+  // --- FILTER & SORT ---
   const filteredScripts = scripts
     .filter((s) => s.title.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {
@@ -103,32 +151,8 @@ const Page = () => {
       }
     });
 
-  const handleCreateScript = async () => {
-    if (!newScriptName.trim()) return;
-    setCreating(true);
-    try {
-      message.success("Script created!");
-      setIsModalOpen(false);
-      setNewScriptName("");
-      const res = await allScripts();
-      setScripts(res.data.scripts);
-    } catch (err) {
-      message.error("Failed to create script.");
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const handleDeleteScript = (id) => {
-    message.info("Delete confirmed (No action taken yet)");
-  };
-
   if (loading) {
-    return (
-      <div style={{ textAlign: "center", marginTop: 100, minHeight: "100vh" }}>
-        <Spin size="large" />
-      </div>
-    );
+    return <CenteredLoader height="100%" />;
   }
 
   return (
@@ -140,6 +164,7 @@ const Page = () => {
         minHeight: "100vh",
       }}
     >
+      {/* --- CONTROL BAR --- */}
       <div
         style={{
           marginBottom: 24,
@@ -187,7 +212,7 @@ const Page = () => {
           description="No scripts found"
           style={{ marginTop: 160 }}
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-        ></Empty>
+        />
       ) : viewMode === "grid" ? (
         // --- GRID VIEW ---
         <Row gutter={[24, 24]}>
@@ -208,20 +233,39 @@ const Page = () => {
                     justifyContent: "space-between",
                   },
                 }}
+                // Navigate on card click
+                onClick={() => navigate(`/script/${script.id}`)}
               >
                 <div>
-                  {/* Header: Icon + Title */}
-                  <Meta
-                    avatar={
-                      <FileTextOutlined
-                        style={{ fontSize: 24, color: token.colorPrimary }}
-                      />
-                    }
-                    title={script.title}
-                    // Description Removed from here to fix alignment
-                  />
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    <Meta
+                      avatar={
+                        <FileTextOutlined
+                          style={{ fontSize: 24, color: token.colorPrimary }}
+                        />
+                      }
+                      title={
+                        <Tooltip title={script.title}>
+                          <span style={{ display: "block", maxWidth: "100%" }}>
+                            {script.title}
+                          </span>
+                        </Tooltip>
+                      }
+                    />
+                    {/* Role Badge (Owner vs Shared) */}
+                    {script.permission !== "owner" && (
+                      <Tag color="blue" style={{ marginRight: 0 }}>
+                        Shared
+                      </Tag>
+                    )}
+                  </div>
 
-                  {/* Date Info: Moved out of Meta to align with Icon (Left Edge) */}
                   <div style={{ marginTop: 20, fontSize: 12 }}>
                     <div
                       style={{ display: "flex", alignItems: "center", gap: 6 }}
@@ -229,15 +273,17 @@ const Page = () => {
                       <ClockCircleOutlined />
                       <span>Updated: {formatDate(script.updatedAt)}</span>
                     </div>
-                    <div
-                      style={{ color: token.colorTextTertiary, marginTop: 4 }}
-                    >
-                      Created: {formatDate(script.createdAt)}
-                    </div>
+                    {/* Show Owner Name if not me */}
+                    {script.permission !== "owner" && (
+                      <div
+                        style={{ color: token.colorTextTertiary, marginTop: 4 }}
+                      >
+                        Owner: {script.ownerName}
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Footer Buttons */}
                 <div
                   style={{
                     marginTop: 24,
@@ -246,32 +292,31 @@ const Page = () => {
                     alignItems: "center",
                   }}
                 >
-                  <Button
-                    type="primary"
-                    onClick={() => navigate(`/script/${script.id}`)}
-                  >
-                    Open
-                  </Button>
+                  <Button type="primary">Open</Button>
 
-                  <Popconfirm
-                    title="Delete Script"
-                    description="Are you sure you want to delete this script?"
-                    onConfirm={(e) => {
-                      e.stopPropagation();
-                      handleDeleteScript(script.id);
-                    }}
-                    onCancel={(e) => e.stopPropagation()}
-                    okText="Yes"
-                    cancelText="No"
-                    icon={<QuestionCircleOutlined style={{ color: "red" }} />}
-                  >
-                    <Button
-                      type="text"
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </Popconfirm>
+                  {/* Only show delete if owner */}
+                  {script.permission === "owner" && (
+                    <Popconfirm
+                      title="Delete Script"
+                      description="Are you sure? This cannot be undone."
+                      onConfirm={(e) => {
+                        e.stopPropagation();
+                        handleDeleteScript(script.id);
+                      }}
+                      onCancel={(e) => e.stopPropagation()}
+                      okText="Delete"
+                      okButtonProps={{ danger: true }}
+                      cancelText="Cancel"
+                      icon={<QuestionCircleOutlined style={{ color: "red" }} />}
+                    >
+                      <Button
+                        type="text"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={(e) => e.stopPropagation()} // Stop card click
+                      />
+                    </Popconfirm>
+                  )}
                 </div>
               </Card>
             </Col>
@@ -289,24 +334,40 @@ const Page = () => {
                 padding: 16,
                 marginBottom: 12,
                 borderRadius: 8,
+                cursor: "pointer",
               }}
+              onClick={() => navigate(`/script/${item.id}`)}
               actions={[
                 <Button
                   type="primary"
-                  onClick={() => navigate(`/script/${item.id}`)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/script/${item.id}`);
+                  }}
                 >
                   Open
                 </Button>,
-                <Popconfirm
-                  title="Delete Script"
-                  description="Are you sure you want to delete this script?"
-                  onConfirm={() => handleDeleteScript(item.id)}
-                  okText="Yes"
-                  cancelText="No"
-                  placement="left"
-                >
-                  <Button type="text" danger icon={<DeleteOutlined />} />
-                </Popconfirm>,
+                item.permission === "owner" && (
+                  <Popconfirm
+                    title="Delete Script"
+                    description="Permanently delete this script?"
+                    onConfirm={(e) => {
+                      e.stopPropagation();
+                      handleDeleteScript(item.id);
+                    }}
+                    onCancel={(e) => e.stopPropagation()}
+                    okText="Delete"
+                    okButtonProps={{ danger: true }}
+                    cancelText="Cancel"
+                  >
+                    <Button
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </Popconfirm>
+                ),
               ]}
             >
               <List.Item.Meta
@@ -315,15 +376,13 @@ const Page = () => {
                     style={{ fontSize: 24, color: token.colorPrimary }}
                   />
                 }
-                title={
-                  <a onClick={() => navigate(`/script/${item.id}`)}>
-                    {item.title}
-                  </a>
-                }
+                title={item.title}
                 description={
                   <Space size="large" style={{ fontSize: 12 }}>
                     <span>Updated: {formatDate(item.updatedAt)}</span>
-                    <span>Created: {formatDate(item.createdAt)}</span>
+                    {item.permission !== "owner" && (
+                      <Tag color="geekblue">Owner: {item.ownerName}</Tag>
+                    )}
                   </Space>
                 }
               />
