@@ -450,25 +450,6 @@ const Timeline = ({ visualizerConfig, sceneData = [] }) => {
         userSelect: "none",
       }}
     >
-      {/* Header Info */}
-      <div
-        style={{
-          marginBottom: 12,
-          display: "flex",
-          justifyContent: "space-between",
-        }}
-      >
-        <Text strong style={{ fontSize: 12 }}>
-          TIMELINE
-        </Text>
-        <Text
-          type="secondary"
-          style={{ fontSize: 12, fontFamily: "monospace" }}
-        >
-          {Math.round((progress / 100) * totalLength)}s / {totalLength}s
-        </Text>
-      </div>
-
       {/* Timeline Track Area */}
       <div
         ref={containerRef}
