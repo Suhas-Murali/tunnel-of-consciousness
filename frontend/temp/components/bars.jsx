@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Layout, Button, Space, Typography, theme, Breadcrumb } from "antd";
 import { ArrowLeftOutlined, CodeSandboxOutlined } from "@ant-design/icons";
 import { useNavigate, useLocation, Link } from "react-router-dom";
@@ -57,7 +57,8 @@ const DynamicBreadcrumbs = () => {
  * @param {Array<React.ReactNode>} rightItems - Components to render on the far right.
  * @param {boolean | React.ReactNode} breadcrumbs - Show breadcrumbs
  * @param {boolean} hidden - If true, returns null.
- * @param {boolean} sticky - If true, fixes header to top with z-index.
+ * @param {boolean} sticky - If true, fixes header to top with z-index (Always visible).
+ * @param {boolean} autoHide - If true, fixes header to top but hides it until mouse is at top (Overrides sticky).
  * @param {object} style - Custom CSS overrides.
  */
 const Header = ({
@@ -73,12 +74,59 @@ const Header = ({
   breadcrumbs,
   hidden = false,
   sticky = false,
+  autoHide = false,
   style = {},
 }) => {
   const navigate = useNavigate();
   const {
     token: { colorBgContainer, paddingMD, paddingXS, colorBorderSecondary },
   } = theme.useToken();
+
+  const [isVisible, setIsVisible] = useState(!autoHide);
+  const hoverTimerRef = useRef(null);
+
+  // Logic for Auto-Hide with Delay
+  useEffect(() => {
+    if (!autoHide) {
+      setIsVisible(true);
+      return;
+    }
+
+    const handleMouseMove = (e) => {
+      // 1. Enter Trigger Zone (Top 50px)
+      if (e.clientY < 50) {
+        // Only start timer if not already visible and no timer is running
+        if (!isVisible && !hoverTimerRef.current) {
+          hoverTimerRef.current = setTimeout(() => {
+            setIsVisible(true);
+            hoverTimerRef.current = null; // Cleanup ref after firing
+          }, 2000); // 2-second delay
+        }
+      }
+      // 2. Leave Safe Zone (Top 100px)
+      else if (e.clientY > 100) {
+        // If cursor moves away, cancel any pending show timer
+        if (hoverTimerRef.current) {
+          clearTimeout(hoverTimerRef.current);
+          hoverTimerRef.current = null;
+        }
+        // Hide immediately if visible
+        if (isVisible) {
+          setIsVisible(false);
+        }
+      }
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+
+    // Cleanup on unmount or prop change
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      if (hoverTimerRef.current) {
+        clearTimeout(hoverTimerRef.current);
+      }
+    };
+  }, [autoHide, isVisible]);
 
   if (hidden) return null;
 
@@ -87,9 +135,28 @@ const Header = ({
   const handleTitleClick = headerTitleAction || (() => navigate("/"));
 
   const baseHeight = breadcrumbs ? "auto" : 64;
-  const stickyStyle = sticky
-    ? { position: "sticky", top: 0, zIndex: 1000, width: "100%" }
-    : {};
+
+  // Determine Positioning Style
+  let positionStyle = {};
+
+  if (autoHide) {
+    positionStyle = {
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 1000,
+      transform: isVisible ? "translateY(0)" : "translateY(-100%)",
+      transition: "transform 0.3s ease-in-out",
+    };
+  } else if (sticky) {
+    positionStyle = {
+      position: "sticky",
+      top: 0,
+      zIndex: 1000,
+      width: "100%",
+    };
+  }
 
   return (
     <AntHeader
@@ -102,7 +169,9 @@ const Header = ({
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
-        ...stickyStyle,
+        boxShadow:
+          autoHide && isVisible ? "0 2px 8px rgba(0,0,0,0.15)" : "none",
+        ...positionStyle,
         ...style,
       }}
     >
@@ -196,12 +265,7 @@ const Header = ({
         </div>
       </div>
 
-      {breadcrumbs && (
-        // <div style={{ paddingBottom: paddingXS, paddingTop: 0 }}>
-        //   {secondRow}
-        // </div>
-        <DynamicBreadcrumbs />
-      )}
+      {breadcrumbs && <DynamicBreadcrumbs />}
     </AntHeader>
   );
 };

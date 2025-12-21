@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useOutletContext } from "react-router-dom";
 import { Card, Button, Tooltip, Divider, Space, theme } from "antd";
 import {
@@ -13,13 +13,11 @@ import {
 import { StarterKit } from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCaret from "@tiptap/extension-collaboration-caret";
-import * as Y from "yjs";
-import { HocuspocusProvider } from "@hocuspocus/provider";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
-import { CenteredLoader } from "./loader";
+import { CenteredLoader } from "./loader"; // Ensure you have this path correct
 
-// --- CSS styles stay the same as before ---
+// --- CSS Styles (Unchanged) ---
 const getEditorStyles = (token) => `
   .ProseMirror {
     outline: none;
@@ -124,6 +122,7 @@ const EditorToolbar = ({ editor, token }) => {
   );
 };
 
+// Now accepts `provider` as a prop
 const ScriptEditor = ({ provider }) => {
   const { user } = useOutletContext() || {
     user: { username: "Guest", color: "#555" },
@@ -135,7 +134,9 @@ const ScriptEditor = ({ provider }) => {
       content: null,
       extensions: [
         StarterKit.configure({ undoRedo: false }),
+        // Connect to the shared document passed from parent
         Collaboration.configure({ document: provider.document }),
+        // Connect cursors to the shared provider passed from parent
         CollaborationCaret.configure({
           provider,
           user: { name: user.username, color: token.colorPrimary },
@@ -146,15 +147,6 @@ const ScriptEditor = ({ provider }) => {
   );
 
   const styles = getEditorStyles(token);
-
-  const cardBodyStyle = {
-    padding: 0,
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden",
-    backgroundColor: token.colorBgContainer,
-  };
 
   return (
     <>
@@ -168,7 +160,16 @@ const ScriptEditor = ({ provider }) => {
           overflow: "hidden",
           backgroundColor: token.colorBgContainer,
         }}
-        styles={{ body: cardBodyStyle }}
+        styles={{
+          body: {
+            padding: 0,
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            backgroundColor: token.colorBgContainer,
+          },
+        }}
       >
         <EditorToolbar editor={editor} token={token} />
 
@@ -212,35 +213,13 @@ const ScriptEditor = ({ provider }) => {
   );
 };
 
-const EditorWindow = ({ documentName }) => {
-  const [provider, setProvider] = useState(null);
-  const [isSynced, setIsSynced] = useState(false);
-  const { token } = theme.useToken();
-
-  useEffect(() => {
-    const ydoc = new Y.Doc();
-    const newProvider = new HocuspocusProvider({
-      url: "ws://localhost:5050",
-      name: documentName || "default-script",
-      document: ydoc,
-    });
-    newProvider.on("synced", () => setIsSynced(true));
-    setProvider(newProvider);
-    return () => {
-      newProvider.destroy();
-      ydoc.destroy();
-      setIsSynced(false);
-    };
-  }, [documentName]);
-
-  if (!provider || !isSynced) {
+// The Window Wrapper
+const EditorWindow = ({ provider }) => {
+  if (!provider) {
     return <CenteredLoader height="100%" />;
   }
 
   return (
-    // This wrapper ensures the component takes up all available space
-    // If this background color (red/green debug) shows up as a small strip,
-    // your PARENT LAYOUT is the problem.
     <div
       style={{
         height: "100%",
@@ -254,4 +233,4 @@ const EditorWindow = ({ documentName }) => {
   );
 };
 
-export default EditorWindow;
+export { EditorWindow };

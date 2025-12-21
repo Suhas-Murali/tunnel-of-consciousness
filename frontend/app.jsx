@@ -44,6 +44,7 @@ const MainLayout = () => {
     try {
       setIsLoading(true);
       await logout();
+      localStorage.clear();
     } catch (err) {
       console.error("Failed to logout: ", err);
     } finally {
