@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
+import * as THREE from "three";
 import {
-  Result,
   Button,
   Dropdown,
   Modal,
@@ -10,6 +10,7 @@ import {
   message,
   Tooltip,
   theme,
+  Empty,
 } from "antd";
 import {
   AppstoreAddOutlined,
@@ -18,6 +19,11 @@ import {
   BorderBottomOutlined,
   PlusSquareOutlined,
   CloseOutlined,
+  EditOutlined,
+  FundProjectionScreenOutlined,
+  FieldTimeOutlined,
+  TeamOutlined,
+  VideoCameraOutlined, // <--- New Icon
 } from "@ant-design/icons";
 
 // YJS Imports
@@ -29,14 +35,265 @@ import "rc-dock/dist/rc-dock.css";
 
 import { GetDashboardButton, HeaderPropsCommon } from "../components/bars";
 import { ScriptSettings } from "../components/settings";
-import { EditorWindow as Editor } from "../components/editors";
-import { Visualizer } from "../components/visualizations";
-import { CenteredLoader } from "../components/loader"; // Ensure this exists
+import {
+  EditorWindow,
+  SceneOverview,
+  CharacterOverview,
+} from "../components/editors";
+import { Visualizer, Timeline } from "../components/visualizations";
+import { CenteredLoader } from "../components/loader";
 import { deleteScript } from "../../api";
 
 const { Text } = Typography;
 
-// ... [getDockThemeStyles remains exactly the same] ...
+// ==========================================
+// 1. DATA & CONFIG
+// ==========================================
+
+const VISUALIZER_CONFIG = {
+  length: 100,
+  radius: 6,
+  baseThickness: 0.05,
+};
+
+const MOCK_VISUALIZER_DATA = [
+  {
+    id: "char-1",
+    name: "Commander Shepard",
+    emotion: "Determination",
+    color: new THREE.Color("#ff0040"),
+    significance: 2.0,
+    points: [
+      [-2, 1, 0],
+      [-2.5, 2, 25],
+      [-1.5, 0.5, 50],
+      [-2, 1, 75],
+      [-2, 3, 100],
+    ],
+  },
+  {
+    id: "char-2",
+    name: "Liara T'Soni",
+    emotion: "Grief",
+    color: new THREE.Color("#0040ff"),
+    significance: 0.8,
+    points: [
+      [2, -1, 0],
+      [2.2, -1.5, 25],
+      [1.8, -0.5, 50],
+      [2, -2, 75],
+      [2.5, -1, 100],
+    ],
+  },
+  {
+    id: "char-3",
+    name: "Garrus Vakarian",
+    emotion: "Supportive",
+    color: new THREE.Color("#00ff80"),
+    significance: 1.2,
+    points: [
+      [0.5, 3, 0],
+      [0.8, 2.8, 25],
+      [0.2, 3.2, 50],
+      [0.5, 3, 100],
+    ],
+  },
+  {
+    id: "char-4",
+    name: "Tali'Zorah",
+    emotion: "Curiosity",
+    color: new THREE.Color("#ffff00"),
+    significance: 1.2,
+    points: [
+      [0.8, 3.2, 0],
+      [1.1, 3.0, 25],
+      [0.5, 3.4, 50],
+      [0.8, 3.2, 100],
+    ],
+  },
+];
+
+const MOCK_SCENE_DATA = [
+  {
+    id: "s1",
+    name: "Scene 1: The Arrival",
+    start: 0,
+    end: 20,
+    color: "#faad14",
+  },
+  {
+    id: "s2",
+    name: "Scene 2: Discussion",
+    start: 25,
+    end: 55,
+    color: "#52c41a",
+  },
+  {
+    id: "s3",
+    name: "Scene 3: The Conflict",
+    start: 60,
+    end: 90,
+    color: "#ff4d4f",
+  },
+];
+
+// Mock Data for Character Overview
+const MOCK_CHARACTER_DETAILS = {
+  "char-1": {
+    role: "Systems Alliance Commander",
+    traits: ["Paragon", "Determined", "Leader"],
+    description:
+      "Shepard displays high levels of stress but maintains composure. Voice analysis indicates suppressed urgency.",
+    scenes: [
+      {
+        sceneId: "s1",
+        sceneName: "The Arrival",
+        dialogueCount: 3,
+        dialogues: [
+          "We have to land now, Joker.",
+          "I don't care about the regulations.",
+          "Get us on the ground.",
+        ],
+      },
+      {
+        sceneId: "s3",
+        sceneName: "The Conflict",
+        dialogueCount: 2,
+        dialogues: ["This ends here!", "Make your choice."],
+      },
+    ],
+  },
+  "char-2": {
+    role: "Prothean Researcher",
+    traits: ["Intellectual", "Empathetic", "Biotic"],
+    description:
+      "Liara is exhibiting signs of deep grief. Her biometrics show elevated heart rate during the discussion of Thessia.",
+    scenes: [
+      {
+        sceneId: "s2",
+        sceneName: "Discussion",
+        dialogueCount: 4,
+        dialogues: [
+          "The patterns... they match the Prothean archives.",
+          "I can't believe it's gone.",
+          "We must focus on the Crucible.",
+          "It is our only hope.",
+        ],
+      },
+    ],
+  },
+  "char-3": {
+    role: "Turian Advisor",
+    traits: ["Loyal", "Tactical", "Calibrating"],
+    description:
+      "Garrus is acting as a stabilizing force. He is constantly scanning the perimeter.",
+    scenes: [
+      {
+        sceneId: "s1",
+        sceneName: "The Arrival",
+        dialogueCount: 2,
+        dialogues: ["Scoop looks clear, Commander.", "Just like old times."],
+      },
+    ],
+  },
+  "char-4": {
+    role: "Quarian Machinist",
+    traits: ["Tech Expert", "Curious", "Loyal"],
+    description:
+      "Tali is focused on the tech readings. She is notably avoiding eye contact with the Legion unit.",
+    scenes: [
+      {
+        sceneId: "s2",
+        sceneName: "Discussion",
+        dialogueCount: 2,
+        dialogues: ["These readings are off the charts.", "Keelah se'lai."],
+      },
+    ],
+  },
+};
+
+// --- NEW MOCK DATA FOR SCENE OVERVIEW ---
+const MOCK_SCENE_DETAILS = {
+  s1: {
+    id: "s1",
+    duration: "1m 45s",
+    type: "Action",
+    pacing: 85,
+    synopsis:
+      "The Normandy executes a high-gravity insertion. Shepard orders the shuttle drop despite Joker's warnings. The team lands under heavy fire.",
+    focusCharacter: "char-1", // Shepard
+    characters: ["char-1", "char-3"], // Shepard, Garrus
+    composition: { action: 80, dialogue: 20 },
+  },
+  s2: {
+    id: "s2",
+    duration: "3m 10s",
+    type: "Exposition",
+    pacing: 30,
+    synopsis:
+      "The team regroups in the ruins. Liara discovers ancient Prothean markings that suggest a warning about the Reapers' cycle. Tali analyzes the energy readings.",
+    focusCharacter: "char-2", // Liara
+    characters: ["char-1", "char-2", "char-4"], // Shepard, Liara, Tali
+    composition: { action: 10, dialogue: 90 },
+  },
+  s3: {
+    id: "s3",
+    duration: "2m 05s",
+    type: "Emotional",
+    pacing: 65,
+    synopsis:
+      "A standoff with the Reaper Destroyer. Shepard must choose between calling the fleet or sacrificing the localized relay. High emotional stakes.",
+    focusCharacter: "char-1",
+    characters: ["char-1", "char-2", "char-3", "char-4"],
+    composition: { action: 40, dialogue: 60 },
+  },
+};
+
+// ==========================================
+// 2. PANEL REGISTRY
+// ==========================================
+const PANEL_REGISTRY = {
+  editor: {
+    id: "editor",
+    label: "Script Editor",
+    icon: <EditOutlined />,
+    component: EditorWindow,
+    defaultGroup: "editor-group",
+  },
+  visualizer: {
+    id: "visualizer",
+    label: "3D Visualizer",
+    icon: <FundProjectionScreenOutlined />,
+    component: Visualizer,
+    defaultGroup: "visualizer-group",
+  },
+  timeline: {
+    id: "timeline",
+    label: "Timeline",
+    icon: <FieldTimeOutlined />,
+    component: Timeline,
+    defaultGroup: "timeline-group",
+  },
+  char_overview: {
+    id: "char_overview",
+    label: "Character Overview",
+    icon: <TeamOutlined />,
+    component: CharacterOverview,
+    defaultGroup: "editor-group",
+  },
+  // --- NEW REGISTRY ENTRY ---
+  scene_overview: {
+    id: "scene_overview",
+    label: "Scene Overview",
+    icon: <VideoCameraOutlined />,
+    component: SceneOverview,
+    defaultGroup: "visualizer-group", // Group with visualizer
+  },
+};
+
+// ==========================================
+// 3. CSS STYLES
+// ==========================================
 const getDockThemeStyles = (token) => `
   .dock-layout { background: ${token.colorBgLayout} !important; }
   .dock-panel { background: ${token.colorBgContainer}; border: 1px solid ${token.colorBorderSecondary}; }
@@ -68,18 +325,16 @@ const ScriptPage = () => {
   const [provider, setProvider] = useState(null);
   const [isSynced, setIsSynced] = useState(false);
 
-  // Helper for LocalStorage Key
   const getStorageKey = (id) => `tunnel_layout_${id}`;
 
   // 1. Initialize YJS Provider on Mount
   useEffect(() => {
-    // Clean up previous provider if scriptId changes quickly
     setProvider(null);
     setIsSynced(false);
 
     const ydoc = new Y.Doc();
     const newProvider = new HocuspocusProvider({
-      url: "ws://localhost:5050", // Your websocket URL
+      url: "ws://localhost:5050",
       name: scriptId || "default-script",
       document: ydoc,
     });
@@ -142,31 +397,49 @@ const ScriptPage = () => {
     [token]
   );
 
-  /**
-   * Creates a panel object.
-   * NOW ACCEPTS THE PROVIDER to pass down to children
-   */
   const createPanel = useCallback(
     (type, existingId = null) => {
+      const registryItem = PANEL_REGISTRY[type];
+
+      if (!registryItem) {
+        console.warn(`Unknown panel type: ${type}`);
+        return {
+          id: existingId || `unknown-${Date.now()}`,
+          title: "Unknown Panel",
+          content: <Empty description="Panel type not found" />,
+          closable: true,
+          group: "locked",
+        };
+      }
+
       const id = existingId || `${type}-${Date.now()}`;
-      const titleText = type === "editor" ? "Script Editor" : "Visualizer";
+      const Component = registryItem.component;
 
       return {
         id: id,
-        title: createTabTitle(titleText, id),
-        content:
-          type === "editor" ? (
-            // PASS PROVIDER HERE
-            <Editor documentName={scriptId} provider={provider} />
-          ) : (
-            // PASS PROVIDER HERE (for future use in Visualizer)
-            <Visualizer token={token} provider={provider} />
-          ),
+        title: createTabTitle(registryItem.label, id),
+        content: (
+          <Component
+            provider={provider}
+            scriptId={scriptId}
+            token={token}
+            user={user}
+            documentName={scriptId}
+            visualizerData={MOCK_VISUALIZER_DATA}
+            visualizerConfig={VISUALIZER_CONFIG}
+            sceneData={MOCK_SCENE_DATA}
+            characterList={MOCK_VISUALIZER_DATA}
+            characterDetails={MOCK_CHARACTER_DETAILS}
+            // --- PASS NEW DATA ---
+            sceneList={MOCK_SCENE_DATA} // For the dropdown
+            sceneDetails={MOCK_SCENE_DETAILS} // For the content
+          />
+        ),
         closable: false,
         group: "locked",
       };
     },
-    [scriptId, token, createTabTitle, provider]
+    [scriptId, token, createTabTitle, provider, user]
   );
 
   // --- LAYOUT STORAGE & HYDRATION ---
@@ -174,19 +447,37 @@ const ScriptPage = () => {
   const getInitialLayout = () => {
     return {
       dockbox: {
-        mode: "horizontal",
+        mode: "vertical",
         children: [
+          // Top Row
           {
-            id: "visualizer-group",
-            group: "locked",
-            tabs: [createPanel("visualizer")],
-            size: 650,
-          },
-          {
-            id: "editor-group",
-            group: "locked",
-            tabs: [createPanel("editor")],
+            mode: "horizontal",
             size: 800,
+            children: [
+              {
+                id: "visualizer-group",
+                group: "locked",
+                // Added Scene Overview here
+                tabs: [
+                  createPanel("visualizer"),
+                  createPanel("scene_overview"),
+                ],
+                size: 650,
+              },
+              {
+                id: "editor-group",
+                group: "locked",
+                tabs: [createPanel("editor"), createPanel("char_overview")],
+                size: 800,
+              },
+            ],
+          },
+          // Bottom Row
+          {
+            id: "timeline-group",
+            group: "locked",
+            tabs: [createPanel("timeline")],
+            size: 150,
           },
         ],
       },
@@ -199,10 +490,7 @@ const ScriptPage = () => {
         if (box.children) box.children.forEach(walk);
         if (box.tabs) {
           box.tabs.forEach((tab) => {
-            const isEditor = tab.id.startsWith("editor");
-            const type = isEditor ? "editor" : "visualizer";
-
-            // Re-create the panel properties with the CURRENT provider
+            const type = tab.id.split("-")[0];
             const hydratedPanel = createPanel(type, tab.id);
 
             tab.title = hydratedPanel.title;
@@ -235,12 +523,10 @@ const ScriptPage = () => {
   const [layoutConfig, setLayoutConfig] = useState(null);
   const [dockKey, setDockKey] = useState(0);
 
-  // Initialize Layout ONLY when provider is ready
   useEffect(() => {
     if (isSynced && provider) {
       const layout = loadLayout();
       setLayoutConfig(layout);
-      // Force dock remount when we finally have the provider ready
       setDockKey((prev) => prev + 1);
     }
   }, [scriptId, loadLayout, isSynced, provider]);
@@ -308,55 +594,34 @@ const ScriptPage = () => {
     }
   };
 
-  const menuItems = [
-    {
-      key: "grp-editor",
+  const menuItems = useMemo(() => {
+    return Object.entries(PANEL_REGISTRY).map(([key, config]) => ({
+      key: `grp-${key}`,
       type: "group",
-      label: "Script Editor",
+      label: config.label,
       children: [
         {
-          key: "editor-tab",
+          key: `${key}-tab`,
           label: "Add as Tab",
           icon: <PlusSquareOutlined />,
-          onClick: () => addWindow("editor", "middle"),
+          onClick: () => addWindow(key, "middle"),
         },
         {
-          key: "editor-split-right",
+          key: `${key}-split-right`,
           label: "Split Right",
           icon: <BorderRightOutlined />,
-          onClick: () => addWindow("editor", "right"),
+          onClick: () => addWindow(key, "right"),
         },
         {
-          key: "editor-split-down",
+          key: `${key}-split-down`,
           label: "Split Down",
           icon: <BorderBottomOutlined />,
-          onClick: () => addWindow("editor", "bottom"),
+          onClick: () => addWindow(key, "bottom"),
         },
       ],
-    },
-    { type: "divider" },
-    {
-      key: "grp-vis",
-      type: "group",
-      label: "Visualizer",
-      children: [
-        {
-          key: "vis-tab",
-          label: "Add as Tab",
-          icon: <PlusSquareOutlined />,
-          onClick: () => addWindow("visualizer", "middle"),
-        },
-        {
-          key: "vis-split-right",
-          label: "Split Right",
-          icon: <BorderRightOutlined />,
-          onClick: () => addWindow("visualizer", "right"),
-        },
-      ],
-    },
-  ];
+    }));
+  }, [addWindow]);
 
-  // RENDER: Show Loader if not synced yet
   if (!isSynced || !provider) {
     return (
       <div
@@ -399,6 +664,7 @@ const ScriptPage = () => {
             menu={{ items: menuItems }}
             trigger={["click"]}
             placement="bottomLeft"
+            overlayStyle={{ maxHeight: "400px", overflowY: "auto" }}
           >
             <Button icon={<AppstoreAddOutlined />}>Add Window</Button>
           </Dropdown>

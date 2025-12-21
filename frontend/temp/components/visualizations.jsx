@@ -3,79 +3,18 @@ import * as THREE from "three";
 import { Canvas, useFrame, useThree, extend } from "@react-three/fiber";
 import { Html, shaderMaterial } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
-import { Button, Result, Card, Tag, Typography } from "antd";
-import { ArrowRightOutlined, UserOutlined } from "@ant-design/icons";
+import { theme, Tooltip, Button, Result, Card, Tag, Typography } from "antd";
+import {
+  CaretDownOutlined,
+  ArrowRightOutlined,
+  UserOutlined,
+} from "@ant-design/icons";
 
-const { Text, Title } = Typography;
-
-// ==========================================
-// 1. MOCK DATA & CONFIG
-// ==========================================
-const TUNNEL_LENGTH = 100;
-const TUNNEL_RADIUS = 6;
-const BASE_THICKNESS = 0.05;
-
-const CHARACTERS = [
-  {
-    id: "char-1",
-    name: "Commander Shepard",
-    emotion: "Determination",
-    color: new THREE.Color("#ff0040"),
-    significance: 2.0,
-    points: [
-      [-2, 1, 0],
-      [-2.5, 2, 25],
-      [-1.5, 0.5, 50],
-      [-2, 1, 75],
-      [-2, 3, 100],
-    ],
-  },
-  {
-    id: "char-2",
-    name: "Liara T'Soni",
-    emotion: "Grief",
-    color: new THREE.Color("#0040ff"),
-    significance: 0.8,
-    points: [
-      [2, -1, 0],
-      [2.2, -1.5, 25],
-      [1.8, -0.5, 50],
-      [2, -2, 75],
-      [2.5, -1, 100],
-    ],
-  },
-  {
-    id: "char-3",
-    name: "Garrus Vakarian",
-    emotion: "Supportive",
-    color: new THREE.Color("#00ff80"),
-    significance: 1.2,
-    points: [
-      [0.5, 3, 0],
-      [0.8, 2.8, 25],
-      [0.2, 3.2, 50],
-      [0.5, 3, 100],
-    ],
-  },
-  {
-    id: "char-4",
-    name: "Tali'Zorah",
-    emotion: "Curiosity",
-    color: new THREE.Color("#ffff00"),
-    significance: 1.2,
-    points: [
-      [0.8, 3.2, 0],
-      [1.1, 3.0, 25],
-      [0.5, 3.4, 50],
-      [0.8, 3.2, 100],
-    ],
-  },
-];
+const { Text } = Typography;
 
 // ==========================================
-// 2. HDR BLOOM SHADER
+// 1. HDR BLOOM SHADER (Unchanged)
 // ==========================================
-
 const BloomStrandMaterial = shaderMaterial(
   {
     uTime: 0,
@@ -116,14 +55,14 @@ const BloomStrandMaterial = shaderMaterial(
 extend({ BloomStrandMaterial });
 
 // ==========================================
-// 3. SCENE COMPONENTS
+// 2. SCENE COMPONENTS
 // ==========================================
 
-const Tunnel = () => {
+const Tunnel = ({ config }) => {
   return (
-    <mesh position={[0, 0, TUNNEL_LENGTH / 2]} rotation={[0, 0, 0]}>
+    <mesh position={[0, 0, config.length / 2]} rotation={[0, 0, 0]}>
       <cylinderGeometry
-        args={[TUNNEL_RADIUS, TUNNEL_RADIUS, TUNNEL_LENGTH, 32, 1, true]}
+        args={[config.radius, config.radius, config.length, 32, 1, true]}
       />
       <meshBasicMaterial
         color="#222"
@@ -136,7 +75,7 @@ const Tunnel = () => {
   );
 };
 
-const CharacterStrand = ({ data, currentZ, onHover, onClick }) => {
+const CharacterStrand = ({ data, config, currentZ, onHover, onClick }) => {
   const materialRef = useRef();
 
   const curve = useMemo(() => {
@@ -151,11 +90,11 @@ const CharacterStrand = ({ data, currentZ, onHover, onClick }) => {
     }
   });
 
-  const radius = BASE_THICKNESS * data.significance;
+  const radius = config.baseThickness * data.significance;
 
   return (
     <group>
-      {/* 1. VISIBLE MESH (The pretty, glowing, thin strand) */}
+      {/* 1. VISIBLE MESH */}
       <mesh>
         <tubeGeometry args={[curve, 128, radius, 8, false]} />
         <bloomStrandMaterial
@@ -166,16 +105,16 @@ const CharacterStrand = ({ data, currentZ, onHover, onClick }) => {
         />
       </mesh>
 
-      {/* 2. HIT MESH (Invisible, thicker tube for easier clicking) */}
+      {/* 2. HIT MESH */}
       <mesh
         visible={false}
         onPointerOver={(e) => {
           e.stopPropagation();
-          document.body.style.cursor = "pointer"; // Change cursor
+          document.body.style.cursor = "pointer";
           onHover(true, data, e.clientX, e.clientY);
         }}
         onPointerOut={(e) => {
-          document.body.style.cursor = "auto"; // Reset cursor
+          document.body.style.cursor = "auto";
           onHover(false, null, 0, 0);
         }}
         onClick={(e) => {
@@ -183,7 +122,6 @@ const CharacterStrand = ({ data, currentZ, onHover, onClick }) => {
           onClick(data);
         }}
       >
-        {/* Radius is multiplied by 6 to make hit area generous */}
         <tubeGeometry args={[curve, 64, radius * 6, 8, false]} />
         <meshBasicMaterial color="white" transparent opacity={0} />
       </mesh>
@@ -192,10 +130,10 @@ const CharacterStrand = ({ data, currentZ, onHover, onClick }) => {
 };
 
 // ==========================================
-// 4. INTERACTION RIG
+// 3. INTERACTION RIG
 // ==========================================
 
-const Rig = ({ onEndReached, onHoverStrand, onClickStrand }) => {
+const Rig = ({ config, data, onEndReached, onHoverStrand, onClickStrand }) => {
   const { camera, gl } = useThree();
   const targetZ = useRef(0);
   const currentZ = useRef(0);
@@ -208,7 +146,7 @@ const Rig = ({ onEndReached, onHoverStrand, onClickStrand }) => {
       const delta = e.deltaY * 0.05;
       targetZ.current = Math.max(
         0,
-        Math.min(TUNNEL_LENGTH + 10, targetZ.current + delta)
+        Math.min(config.length + 10, targetZ.current + delta)
       );
     };
 
@@ -248,7 +186,7 @@ const Rig = ({ onEndReached, onHoverStrand, onClickStrand }) => {
       window.removeEventListener("mousemove", handleMove);
       canvas.removeEventListener("contextmenu", handleContextMenu);
     };
-  }, [camera, gl]);
+  }, [camera, gl, config.length]);
 
   useFrame(() => {
     currentZ.current = THREE.MathUtils.lerp(
@@ -257,15 +195,16 @@ const Rig = ({ onEndReached, onHoverStrand, onClickStrand }) => {
       0.08
     );
     camera.position.z = currentZ.current;
-    onEndReached(currentZ.current > TUNNEL_LENGTH - 2);
+    onEndReached(currentZ.current > config.length - 2);
   });
 
   return (
     <group>
-      {CHARACTERS.map((char) => (
+      {data.map((char) => (
         <CharacterStrand
           key={char.id}
           data={char}
+          config={config}
           currentZ={currentZ}
           onHover={onHoverStrand}
           onClick={onClickStrand}
@@ -276,19 +215,24 @@ const Rig = ({ onEndReached, onHoverStrand, onClickStrand }) => {
 };
 
 // ==========================================
-// 5. MAIN COMPONENT
+// 4. MAIN COMPONENT
 // ==========================================
 
-const Visualizer = ({ token }) => {
+const Visualizer = ({ token, visualizerData = [], visualizerConfig }) => {
   const [showEndPrompt, setShowEndPrompt] = useState(false);
-
-  // Tooltip State
   const [tooltip, setTooltip] = useState({
     visible: false,
     x: 0,
     y: 0,
     data: null,
   });
+
+  // Default config if not provided
+  const config = visualizerConfig || {
+    length: 100,
+    radius: 6,
+    baseThickness: 0.05,
+  };
 
   const handleStrandHover = (isActive, data, clientX, clientY) => {
     if (isActive) {
@@ -299,9 +243,7 @@ const Visualizer = ({ token }) => {
   };
 
   const handleStrandClick = (data) => {
-    console.log(`[Interaction] Sync editor to line for: ${data.name}`);
-    console.log(`[Interaction] Open Biodata Panel for: ${data.id}`);
-    // FUTURE: Dispatch event or call prop here to sync editor
+    console.log(`[Interaction] Clicked: ${data.name}`);
   };
 
   return (
@@ -327,8 +269,10 @@ const Visualizer = ({ token }) => {
         <fog attach="fog" args={["#000", 5, 50]} />
         <ambientLight intensity={0.1} />
 
-        <Tunnel />
+        <Tunnel config={config} />
         <Rig
+          config={config}
+          data={visualizerData}
           onEndReached={setShowEndPrompt}
           onHoverStrand={handleStrandHover}
           onClickStrand={handleStrandClick}
@@ -356,11 +300,11 @@ const Visualizer = ({ token }) => {
         <div
           style={{
             position: "absolute",
-            top: tooltip.y + 15, // Offset slightly
+            top: tooltip.y + 15,
             left: tooltip.x + 15,
             zIndex: 20,
-            pointerEvents: "none", // Let clicks pass through
-            transform: "translate(-50%, -50%)", // Center on cursor
+            pointerEvents: "none",
+            transform: "translate(-50%, -50%)",
           }}
         >
           <Card
@@ -434,4 +378,180 @@ const Visualizer = ({ token }) => {
   );
 };
 
-export { Visualizer };
+// ==========================================
+// 5. TIMELINE COMPONENT
+// ==========================================
+
+const Timeline = ({ visualizerConfig, sceneData = [] }) => {
+  const { token } = theme.useToken();
+  const containerRef = useRef(null);
+
+  // State for the scrubber position (0 to 100)
+  const [progress, setProgress] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Total length from config or default to 100
+  const totalLength = visualizerConfig?.length || 100;
+
+  // Handle mouse interaction to move scrubber
+  const handleSeek = (e) => {
+    if (!containerRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const width = rect.width;
+
+    // Calculate percentage
+    let newProgress = (x / width) * 100;
+
+    // Clamp between 0 and 100
+    newProgress = Math.max(0, Math.min(100, newProgress));
+
+    setProgress(newProgress);
+  };
+
+  const handleMouseDown = (e) => {
+    setIsDragging(true);
+    handleSeek(e);
+  };
+
+  useEffect(() => {
+    const handleWindowMouseMove = (e) => {
+      if (isDragging) {
+        handleSeek(e);
+      }
+    };
+
+    const handleWindowMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      window.addEventListener("mousemove", handleWindowMouseMove);
+      window.addEventListener("mouseup", handleWindowMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener("mousemove", handleWindowMouseMove);
+      window.removeEventListener("mouseup", handleWindowMouseUp);
+    };
+  }, [isDragging]);
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        padding: "0 20px",
+        background: token.colorBgContainer,
+        userSelect: "none",
+      }}
+    >
+      {/* Header Info */}
+      <div
+        style={{
+          marginBottom: 12,
+          display: "flex",
+          justifyContent: "space-between",
+        }}
+      >
+        <Text strong style={{ fontSize: 12 }}>
+          TIMELINE
+        </Text>
+        <Text
+          type="secondary"
+          style={{ fontSize: 12, fontFamily: "monospace" }}
+        >
+          {Math.round((progress / 100) * totalLength)}s / {totalLength}s
+        </Text>
+      </div>
+
+      {/* Timeline Track Area */}
+      <div
+        ref={containerRef}
+        onMouseDown={handleMouseDown}
+        style={{
+          position: "relative",
+          height: 40,
+          background: token.colorFillTertiary,
+          borderRadius: 6,
+          cursor: "pointer",
+          overflow: "hidden", // Keeps markers inside rounded corners
+        }}
+      >
+        {/* Render Scene Markers from PROPS */}
+        {sceneData.map((scene) => (
+          <Tooltip title={scene.name} key={scene.id}>
+            <div
+              style={{
+                position: "absolute",
+                left: `${scene.start}%`,
+                width: `${scene.end - scene.start}%`,
+                top: 8,
+                bottom: 8,
+                backgroundColor: scene.color,
+                opacity: 0.3,
+                borderLeft: `2px solid ${scene.color}`,
+                borderRight: `2px solid ${scene.color}`,
+                borderRadius: 4,
+                transition: "opacity 0.2s",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = 0.6)}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = 0.3)}
+            />
+          </Tooltip>
+        ))}
+
+        {/* Ruler Lines */}
+        {Array.from({ length: 11 }).map((_, i) => (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              left: `${i * 10}%`,
+              bottom: 0,
+              height: i % 5 === 0 ? "50%" : "25%",
+              width: 1,
+              background: token.colorBorder,
+            }}
+          />
+        ))}
+
+        {/* Scrubber Head & Line */}
+        <div
+          style={{
+            position: "absolute",
+            left: `${progress}%`,
+            top: 0,
+            bottom: 0,
+            width: 2,
+            background: token.colorPrimary,
+            zIndex: 10,
+            transform: "translateX(-50%)",
+            pointerEvents: "none",
+          }}
+        >
+          {/* Handle Icon */}
+          <div
+            style={{
+              position: "absolute",
+              top: -6,
+              left: "50%",
+              transform: "translateX(-50%)",
+              color: token.colorPrimary,
+              fontSize: 16,
+              filter: "drop-shadow(0 2px 2px rgba(0,0,0,0.2))",
+            }}
+          >
+            <CaretDownOutlined />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export { Visualizer, Timeline };
