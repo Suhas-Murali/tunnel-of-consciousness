@@ -20,6 +20,10 @@ const AuthenticatedPage = ({ children }) => {
     return <CenteredLoader />;
   }
 
+  if (!isLoggedIn) {
+    navigate("/auth/login", { replace: true });
+  }
+
   return isLoggedIn && user ? children : null;
 };
 

@@ -12,7 +12,7 @@ import { ConfigProvider, Layout, theme, Spin, Button, Result } from "antd";
 
 const { Content, Footer } = Layout;
 import { TOC } from "./temp/toc";
-import { getProfile } from "./api";
+import { getProfile, logout } from "./api";
 
 const MainLayout = () => {
   const {
@@ -40,11 +40,25 @@ const MainLayout = () => {
     }
   };
 
+  const performLogout = async () => {
+    try {
+      setIsLoading(true);
+      await logout();
+    } catch (err) {
+      console.error("Failed to logout: ", err);
+    } finally {
+      setIsLoggedIn(false);
+      setUser(null);
+      setIsLoading(false);
+    }
+  };
+
   const context = {
     isLoggedIn,
     user,
     navigate,
     checkAuth,
+    performLogout,
   };
 
   useEffect(() => {

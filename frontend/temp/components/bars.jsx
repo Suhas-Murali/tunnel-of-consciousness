@@ -2,7 +2,6 @@ import React from "react";
 import { Layout, Button, Space, Typography, theme, Breadcrumb } from "antd";
 import { ArrowLeftOutlined, CodeSandboxOutlined } from "@ant-design/icons";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { logout } from "../../api";
 
 const { Header: AntHeader } = Layout;
 const { Title } = Typography;
@@ -227,8 +226,7 @@ const GetLogoutButton = (context) => (
   <Button
     onClick={async () => {
       try {
-        await logout();
-        await context.checkAuth();
+        await context.performLogout();
         context.navigate("/auth/login");
         window.location.reload();
       } catch (err) {
