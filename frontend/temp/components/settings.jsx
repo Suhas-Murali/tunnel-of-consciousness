@@ -17,7 +17,6 @@ import {
 import { UserOutlined, SendOutlined } from "@ant-design/icons";
 
 import {
-  getScriptById,
   renameScript,
   shareScript,
   updateScriptPermission,
@@ -31,37 +30,32 @@ const { Option } = Select;
 // ==========================================
 // SCRIPT SETTINGS TAB (Permissions & Metadata)
 // ==========================================
-const ScriptSettings = ({ scriptId, currentUser, onRename, onDelete }) => {
-  const [loading, setLoading] = useState(true);
+const ScriptSettings = ({
+  script: inScript,
+  currentUser,
+  onRename,
+  onDelete,
+  loadScriptData,
+}) => {
   const [script, setScript] = useState(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("viewer");
   const [renameValue, setRenameValue] = useState("");
 
-  // Refresh data helper
-  const loadScriptData = async () => {
-    try {
-      setLoading(true);
-      const res = await getScriptById(scriptId);
-      setScript(res.data.script);
-      setRenameValue(res.data.script.name);
-    } catch (err) {
-      message.error("Failed to load settings.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadScriptData();
-  }, [scriptId]);
+    setScript(inScript);
+    setRenameValue(inScript.name);
+  }, [inScript]);
+
+  if (!script) {
+    return null;
+  }
 
   // --- ACTIONS ---
-
   const handleRename = async () => {
     if (!renameValue.trim() || renameValue === script.name) return;
     try {
-      await renameScript(scriptId, renameValue);
+      await renameScript(script._id, renameValue);
       message.success("Script renamed.");
       loadScriptData();
       if (onRename) onRename(renameValue); // Update parent UI if needed
@@ -73,7 +67,7 @@ const ScriptSettings = ({ scriptId, currentUser, onRename, onDelete }) => {
   const handleInvite = async () => {
     if (!inviteEmail) return;
     try {
-      await shareScript(scriptId, inviteEmail, inviteRole);
+      await shareScript(script._id, inviteEmail, inviteRole);
       message.success(`Invited ${inviteEmail}`);
       setInviteEmail("");
       loadScriptData();
@@ -84,7 +78,7 @@ const ScriptSettings = ({ scriptId, currentUser, onRename, onDelete }) => {
 
   const handleRoleChange = async (userId, newRole) => {
     try {
-      await updateScriptPermission(scriptId, userId, newRole);
+      await updateScriptPermission(script._id, userId, newRole);
       message.success("Permissions updated.");
       loadScriptData();
     } catch (err) {
@@ -94,7 +88,7 @@ const ScriptSettings = ({ scriptId, currentUser, onRename, onDelete }) => {
 
   const handleRemoveUser = async (userId) => {
     try {
-      await removeCollaborator(scriptId, userId);
+      await removeCollaborator(script._id, userId);
       message.success("User removed.");
       loadScriptData();
     } catch (err) {
@@ -104,7 +98,7 @@ const ScriptSettings = ({ scriptId, currentUser, onRename, onDelete }) => {
 
   const handleLeaveScript = async () => {
     try {
-      await removeCollaborator(scriptId, currentUser.id);
+      await removeCollaborator(script._id, currentUser.id);
       message.success("You left the script.");
       onDelete(); // Navigate away
     } catch (err) {
@@ -116,15 +110,13 @@ const ScriptSettings = ({ scriptId, currentUser, onRename, onDelete }) => {
     const newOwnerId = prompt("Enter the User ID of the new owner (Advanced):");
     if (!newOwnerId) return;
     try {
-      await transferOwnership(scriptId, newOwnerId);
+      await transferOwnership(script._id, newOwnerId);
       message.success("Ownership transferred.");
       loadScriptData();
     } catch (err) {
       message.error("Transfer failed. Check User ID.");
     }
   };
-
-  if (loading && !script) return <Spin />;
 
   const isOwner = script?.owner?._id === currentUser.id;
 

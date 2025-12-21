@@ -34,6 +34,13 @@ import {
   UndoOutlined,
   RedoOutlined,
   HighlightOutlined,
+  FlagOutlined,
+  ShareAltOutlined,
+  RiseOutlined,
+  SmileOutlined,
+  FrownOutlined,
+  BarChartOutlined,
+  FontSizeOutlined,
 } from "@ant-design/icons";
 
 import { StarterKit } from "@tiptap/starter-kit";
@@ -261,20 +268,15 @@ const EditorWindow = ({ provider }) => {
   );
 };
 
-const CharacterOverview = ({
-  characterList = [], // List for the dropdown (id, name, color)
-  characterDetails = {}, // Detailed map keyed by ID
-}) => {
+const CharacterOverview = ({ characterList = [], characterDetails = {} }) => {
   const { token } = theme.useToken();
   const [selectedId, setSelectedId] = useState(null);
 
-  // Get the full details for the selected character
   const activeChar = useMemo(
     () => (selectedId ? characterDetails[selectedId] : null),
     [selectedId, characterDetails]
   );
 
-  // Get basic info (color, name) from the list for the header
   const activeBasicInfo = useMemo(
     () => characterList.find((c) => c.id === selectedId),
     [selectedId, characterList]
@@ -284,11 +286,9 @@ const CharacterOverview = ({
     setSelectedId(value);
   };
 
-  // Prepare items for the Collapse component (Scenes)
   const sceneItems = useMemo(() => {
     if (!activeChar || !activeChar.scenes) return [];
-
-    return activeChar.scenes.map((scene, index) => ({
+    return activeChar.scenes.map((scene) => ({
       key: scene.sceneId,
       label: (
         <Space>
@@ -322,6 +322,13 @@ const CharacterOverview = ({
       ),
     }));
   }, [activeChar, activeBasicInfo, token]);
+
+  // Helper for Sentiment Color
+  const getSentimentColor = (val) => {
+    if (val > 0.2) return token.colorSuccess;
+    if (val < -0.2) return token.colorError;
+    return token.colorWarning; // Neutral
+  };
 
   return (
     <div
@@ -393,11 +400,18 @@ const CharacterOverview = ({
                 }}
                 icon={<UserOutlined />}
               />
-              <div>
+              <div style={{ flex: 1 }}>
                 <Title level={4} style={{ margin: 0 }}>
                   {activeBasicInfo?.name}
                 </Title>
-                <Text type="secondary">{activeChar.role}</Text>
+                <Space size={4}>
+                  <Text type="secondary">{activeChar.role}</Text>
+                  {activeChar.archetype && (
+                    <Tag color="purple" bordered={false}>
+                      {activeChar.archetype}
+                    </Tag>
+                  )}
+                </Space>
                 <div style={{ marginTop: 8 }}>
                   {activeChar.traits.map((trait) => (
                     <Tag key={trait} color="blue" bordered={false}>
@@ -408,8 +422,156 @@ const CharacterOverview = ({
               </div>
             </div>
 
+            {/* --- NEW SECTION: SOCIAL DYNAMICS & EMOTION --- */}
+            {activeChar.metrics && (
+              <div style={{ marginBottom: 24 }}>
+                <Row gutter={[16, 16]}>
+                  {/* Social Column */}
+                  <Col span={12}>
+                    <Card
+                      size="small"
+                      title={
+                        <Space>
+                          <ShareAltOutlined /> Social Dynamics
+                        </Space>
+                      }
+                      bordered={false}
+                      style={{
+                        background: token.colorFillQuaternary,
+                        height: "100%",
+                      }}
+                    >
+                      <div style={{ marginBottom: 16 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: 12,
+                          }}
+                        >
+                          <Tooltip title="Degree Centrality: How many people they connect with">
+                            <span>Influence</span>
+                          </Tooltip>
+                          <span>
+                            {Math.round(
+                              activeChar.metrics.degreeCentrality * 100
+                            )}
+                            %
+                          </span>
+                        </div>
+                        <Progress
+                          percent={activeChar.metrics.degreeCentrality * 100}
+                          showInfo={false}
+                          size="small"
+                          strokeColor={token.colorPrimary}
+                        />
+                      </div>
+                      <div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: 12,
+                          }}
+                        >
+                          <Tooltip title="Betweenness Centrality: How often they bridge different groups">
+                            <span>Network Bridge</span>
+                          </Tooltip>
+                          <span>
+                            {Math.round(activeChar.metrics.betweenness * 100)}%
+                          </span>
+                        </div>
+                        <Progress
+                          percent={activeChar.metrics.betweenness * 100}
+                          showInfo={false}
+                          size="small"
+                          strokeColor={token.colorWarning}
+                        />
+                      </div>
+                    </Card>
+                  </Col>
+
+                  {/* Emotion Column */}
+                  <Col span={12}>
+                    <Card
+                      size="small"
+                      title={
+                        <Space>
+                          <SmileOutlined /> Emotional Analysis
+                        </Space>
+                      }
+                      bordered={false}
+                      style={{
+                        background: token.colorFillQuaternary,
+                        height: "100%",
+                      }}
+                    >
+                      <Row gutter={8}>
+                        <Col span={12}>
+                          <Statistic
+                            title="Avg Sentiment"
+                            value={
+                              activeChar.metrics.avgSentiment > 0
+                                ? "Pos"
+                                : "Neg"
+                            }
+                            prefix={
+                              activeChar.metrics.avgSentiment > 0 ? (
+                                <SmileOutlined />
+                              ) : (
+                                <FrownOutlined />
+                              )
+                            }
+                            valueStyle={{
+                              color: getSentimentColor(
+                                activeChar.metrics.avgSentiment
+                              ),
+                              fontSize: 18,
+                            }}
+                          />
+                        </Col>
+                        <Col span={12}>
+                          <Statistic
+                            title="Volatility"
+                            value={Math.round(
+                              activeChar.metrics.volatility * 100
+                            )}
+                            suffix="%"
+                            prefix={<RiseOutlined />}
+                            valueStyle={{ fontSize: 18 }}
+                          />
+                        </Col>
+                      </Row>
+                      <div style={{ marginTop: 8 }}>
+                        <Progress
+                          percent={
+                            (activeChar.metrics.avgSentiment + 1) * 50
+                          } /* Normalizing -1..1 to 0..100 */
+                          showInfo={false}
+                          size="small"
+                          steps={10}
+                          strokeColor={[token.colorError, token.colorSuccess]}
+                        />
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: 10,
+                            color: token.colorTextTertiary,
+                          }}
+                        >
+                          <span>Neg</span>
+                          <span>Pos</span>
+                        </div>
+                      </div>
+                    </Card>
+                  </Col>
+                </Row>
+              </div>
+            )}
+
             <Divider orientation="left" style={{ fontSize: 13 }}>
-              <TagsOutlined /> Observed Characteristics
+              <TagsOutlined /> Characteristics
             </Divider>
 
             <Paragraph
@@ -420,7 +582,7 @@ const CharacterOverview = ({
             </Paragraph>
 
             <Divider orientation="left" style={{ fontSize: 13 }}>
-              <MessageOutlined /> Dialogue & Scene Presence
+              <MessageOutlined /> Dialogue & Scenes
             </Divider>
 
             {/* Scene Breakdown */}
@@ -458,6 +620,13 @@ const SceneOverview = ({
 
   // Helper to get character info by ID
   const getCharInfo = (id) => characterList.find((c) => c.id === id);
+
+  // Helper for Sentiment Color
+  const getSentimentColor = (val) => {
+    if (val > 0.2) return token.colorSuccess;
+    if (val < -0.2) return token.colorError;
+    return token.colorWarning;
+  };
 
   return (
     <div
@@ -518,27 +687,30 @@ const SceneOverview = ({
         ) : (
           <div>
             {/* Header */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "start",
-                marginBottom: 20,
-              }}
-            >
-              <div>
+            <div style={{ marginBottom: 20 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                }}
+              >
                 <Title level={4} style={{ margin: 0 }}>
                   {activeBasicInfo?.name}
                 </Title>
-                <Space style={{ marginTop: 8 }}>
-                  <Tag icon={<ClockCircleOutlined />}>
-                    {activeScene.duration}
+                {activeScene.structuralBeat && (
+                  <Tag color="geekblue" icon={<FlagOutlined />}>
+                    {activeScene.structuralBeat}
                   </Tag>
-                  <Tag color={activeScene.type === "Action" ? "red" : "blue"}>
-                    {activeScene.type}
-                  </Tag>
-                </Space>
+                )}
               </div>
+
+              <Space style={{ marginTop: 8 }}>
+                <Tag icon={<ClockCircleOutlined />}>{activeScene.duration}</Tag>
+                <Tag color={activeScene.type === "Action" ? "red" : "blue"}>
+                  {activeScene.type}
+                </Tag>
+              </Space>
             </div>
 
             <Paragraph
@@ -552,88 +724,160 @@ const SceneOverview = ({
               {activeScene.synopsis}
             </Paragraph>
 
-            <Divider orientation="left" style={{ fontSize: 13 }}>
-              <ThunderboltOutlined /> Pacing & Tone
-            </Divider>
+            {/* --- METRICS DASHBOARD --- */}
+            {activeScene.metrics && (
+              <>
+                <Divider orientation="left" style={{ fontSize: 13 }}>
+                  <BarChartOutlined /> Analysis
+                </Divider>
+                <Row gutter={[12, 12]}>
+                  {/* 1. PACING & DENSITY */}
+                  <Col span={12}>
+                    <Card
+                      size="small"
+                      bordered={false}
+                      style={{
+                        background: token.colorFillQuaternary,
+                        height: "100%",
+                      }}
+                    >
+                      <Space
+                        direction="vertical"
+                        style={{ width: "100%" }}
+                        size={0}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: 12,
+                            marginBottom: 4,
+                          }}
+                        >
+                          <Tooltip title="Subjective narrative speed">
+                            <span>
+                              <ThunderboltOutlined /> Pacing
+                            </span>
+                          </Tooltip>
+                          <span style={{ fontWeight: "bold" }}>
+                            {activeScene.metrics.pacing}/100
+                          </span>
+                        </div>
+                        <Progress
+                          percent={activeScene.metrics.pacing}
+                          showInfo={false}
+                          strokeColor={token.colorPrimary}
+                          size="small"
+                          style={{ marginBottom: 12 }}
+                        />
 
-            <Row gutter={[16, 16]}>
-              <Col span={12}>
-                <Card
-                  size="small"
-                  bordered={false}
-                  style={{ background: token.colorFillQuaternary }}
-                >
-                  <Statistic
-                    title="Intensity / Pacing"
-                    value={activeScene.pacing}
-                    suffix="/ 100"
-                    valueStyle={{
-                      color:
-                        activeScene.pacing > 70
-                          ? token.colorError
-                          : token.colorPrimary,
-                    }}
-                  />
-                  <Progress
-                    percent={activeScene.pacing}
-                    showInfo={false}
-                    strokeColor={
-                      activeScene.pacing > 70
-                        ? token.colorError
-                        : token.colorPrimary
-                    }
-                    size="small"
-                  />
-                </Card>
-              </Col>
-              <Col span={12}>
-                <Card
-                  size="small"
-                  bordered={false}
-                  style={{ background: token.colorFillQuaternary }}
-                >
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    Composition
-                  </Text>
-                  <div style={{ marginTop: 8 }}>
-                    <div
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: 12,
+                            marginBottom: 4,
+                          }}
+                        >
+                          <Tooltip title="Textual Density: Short sentences = High Density">
+                            <span>
+                              <FontSizeOutlined /> Read Speed
+                            </span>
+                          </Tooltip>
+                          <span style={{ fontWeight: "bold" }}>
+                            {activeScene.metrics.linguisticDensity}/100
+                          </span>
+                        </div>
+                        <Progress
+                          percent={activeScene.metrics.linguisticDensity}
+                          showInfo={false}
+                          strokeColor={token.colorWarning}
+                          size="small"
+                        />
+                      </Space>
+                    </Card>
+                  </Col>
+
+                  {/* 2. COMPOSITION & TONE */}
+                  <Col span={12}>
+                    <Card
+                      size="small"
+                      bordered={false}
                       style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        fontSize: 12,
-                        marginBottom: 4,
+                        background: token.colorFillQuaternary,
+                        height: "100%",
                       }}
                     >
-                      <span>
-                        <ThunderboltOutlined /> Action
-                      </span>
-                      <span>
-                        <CommentOutlined /> Dialogue
-                      </span>
-                    </div>
-                    <Progress
-                      percent={activeScene.composition.action}
-                      success={{ percent: 0 }}
-                      strokeColor={token.colorWarning}
-                      trailColor={token.colorInfoBg} // Using blueish bg for dialogue
-                      showInfo={false}
-                    />
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        fontSize: 10,
-                        color: token.colorTextTertiary,
-                        marginTop: 2,
-                      }}
-                    >
-                      <span>{activeScene.composition.action}%</span>
-                      <span>{100 - activeScene.composition.action}%</span>
-                    </div>
-                  </div>
-                </Card>
-              </Col>
-            </Row>
+                      {/* Sentiment Meter */}
+                      <div style={{ marginBottom: 16 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: 12,
+                            marginBottom: 4,
+                          }}
+                        >
+                          <span>Tone</span>
+                          {activeScene.metrics.sentiment > 0 ? (
+                            <SmileOutlined />
+                          ) : (
+                            <FrownOutlined />
+                          )}
+                        </div>
+                        <div
+                          style={{
+                            height: 6,
+                            borderRadius: 3,
+                            background: `linear-gradient(90deg, ${token.colorError} 0%, ${token.colorBgContainer} 50%, ${token.colorSuccess} 100%)`,
+                            position: "relative",
+                          }}
+                        >
+                          <div
+                            style={{
+                              position: "absolute",
+                              left: `${
+                                (activeScene.metrics.sentiment + 1) * 50
+                              }%`,
+                              top: -3,
+                              width: 12,
+                              height: 12,
+                              borderRadius: "50%",
+                              background: token.colorText,
+                              border: `2px solid ${token.colorBgContainer}`,
+                              transition: "all 0.3s",
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Action vs Dialogue */}
+                      <div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: 12,
+                            marginBottom: 4,
+                          }}
+                        >
+                          <span>Action</span>
+                          <span>Dialogue</span>
+                        </div>
+                        <Progress
+                          percent={activeScene.metrics.actionRatio}
+                          success={{ percent: 0 }}
+                          strokeColor={token.colorError}
+                          trailColor={token.colorInfoBg}
+                          showInfo={false}
+                          size="small"
+                        />
+                      </div>
+                    </Card>
+                  </Col>
+                </Row>
+              </>
+            )}
 
             <Divider orientation="left" style={{ fontSize: 13 }}>
               <UserOutlined /> Cast & Focus

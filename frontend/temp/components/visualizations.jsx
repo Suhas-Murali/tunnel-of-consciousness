@@ -3,8 +3,26 @@ import * as THREE from "three";
 import { Canvas, useFrame, useThree, extend } from "@react-three/fiber";
 import { Html, shaderMaterial } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
-import { theme, Tooltip, Button, Result, Card, Tag, Typography } from "antd";
 import {
+  theme,
+  Tooltip,
+  Button,
+  Result,
+  Card,
+  Tag,
+  Typography,
+  Divider,
+  Empty,
+  Row,
+  Col,
+  Statistic,
+} from "antd";
+import {
+  ClockCircleOutlined,
+  EnvironmentOutlined,
+  TeamOutlined,
+  ThunderboltOutlined,
+  FlagOutlined,
   CaretDownOutlined,
   ArrowRightOutlined,
   UserOutlined,
@@ -535,4 +553,352 @@ const Timeline = ({ visualizerConfig, sceneData = [] }) => {
   );
 };
 
-export { Visualizer, Timeline };
+const StoryOverview = ({
+  sceneList = [],
+  sceneDetails = {},
+  characterList = [],
+}) => {
+  const { token } = theme.useToken();
+
+  // --- 1. DATA PROCESSING ---
+  const timelineData = useMemo(() => {
+    // Merge list info with detailed metrics
+    return sceneList.map((scene) => {
+      const details = sceneDetails[scene.id] || {};
+      return {
+        ...scene,
+        ...details,
+        // Default pacing to 50 if missing
+        metrics: details.metrics || { pacing: 50, sentiment: 0 },
+      };
+    });
+  }, [sceneList, sceneDetails]);
+
+  const totalScenes = timelineData.length;
+  const totalDuration = timelineData.reduce((acc, curr) => {
+    // Parse "1m 45s" roughly for demo math, or just count scenes
+    return acc + 1;
+  }, 0);
+
+  // --- 2. RENDERERS ---
+
+  // A. PACING GRAPH (SVG Polyline)
+  // Maps pacing scores (0-100) to a line graph
+  const PacingGraph = () => {
+    if (timelineData.length === 0) return null;
+
+    const height = 60;
+    const width = 100; // Percentage
+    const step = 100 / (timelineData.length - 1 || 1);
+
+    // Build points: "x,y" where x is % and y is inverted height
+    const points = timelineData
+      .map((s, i) => {
+        const x = i * step;
+        const y = height - ((s.metrics?.pacing || 0) / 100) * height;
+        return `${x},${y}`;
+      })
+      .join(" ");
+
+    return (
+      <div
+        style={{
+          width: "100%",
+          height: height,
+          position: "relative",
+          marginBottom: 10,
+        }}
+      >
+        <svg
+          width="100%"
+          height="100%"
+          viewBox={`0 0 100 ${height}`}
+          preserveAspectRatio="none"
+          style={{ overflow: "visible" }}
+        >
+          {/* Gradient Fill */}
+          <defs>
+            <linearGradient id="pacingGradient" x1="0" x2="0" y1="0" y2="1">
+              <stop
+                offset="0%"
+                stopColor={token.colorPrimary}
+                stopOpacity={0.3}
+              />
+              <stop
+                offset="100%"
+                stopColor={token.colorPrimary}
+                stopOpacity={0.0}
+              />
+            </linearGradient>
+          </defs>
+          <path
+            d={`M0,${height} ${points} L100,${height} Z`}
+            fill="url(#pacingGradient)"
+            stroke="none"
+          />
+          {/* The Line */}
+          <polyline
+            points={points}
+            fill="none"
+            stroke={token.colorPrimary}
+            strokeWidth="2"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+        {/* Baseline Label */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: -20,
+            left: 0,
+            fontSize: 10,
+            color: token.colorTextSecondary,
+          }}
+        >
+          Start
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            bottom: -20,
+            right: 0,
+            fontSize: 10,
+            color: token.colorTextSecondary,
+          }}
+        >
+          End
+        </div>
+      </div>
+    );
+  };
+
+  // B. GANTT STRIP (Scenes)
+  const NarrativeGantt = () => {
+    return (
+      <div
+        style={{
+          display: "flex",
+          width: "100%",
+          height: 30,
+          borderRadius: 4,
+          overflow: "hidden",
+        }}
+      >
+        {timelineData.map((scene) => (
+          <Tooltip
+            key={scene.id}
+            title={`${scene.name} (${scene.type}) - ${scene.duration}`}
+          >
+            <div
+              style={{
+                flex: 1, // In real app, flex would be proportional to scene page length
+                background: scene.color,
+                borderRight: `1px solid ${token.colorBgContainer}`,
+                opacity: 0.8,
+                cursor: "pointer",
+                position: "relative",
+              }}
+            >
+              {/* Structural Beat Marker */}
+              {scene.structuralBeat && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}
+                >
+                  <FlagOutlined
+                    style={{
+                      color: "#fff",
+                      filter: "drop-shadow(0 0 2px rgba(0,0,0,0.5))",
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          </Tooltip>
+        ))}
+      </div>
+    );
+  };
+
+  // C. CHARACTER THREADS
+  const CharacterThreads = () => {
+    return (
+      <div style={{ marginTop: 10 }}>
+        {characterList.map((char) => (
+          <div
+            key={char.id}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              marginBottom: 4,
+              height: 16,
+            }}
+          >
+            {/* Label */}
+            <div
+              style={{
+                width: 120,
+                fontSize: 11,
+                color: token.colorTextSecondary,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {char.name}
+            </div>
+            {/* The Thread */}
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                height: "100%",
+                alignItems: "center",
+              }}
+            >
+              {timelineData.map((scene) => {
+                const isPresent = scene.characters?.includes(char.id);
+                return (
+                  <div
+                    key={scene.id}
+                    style={{
+                      flex: 1,
+                      height: isPresent ? 8 : 1,
+                      background: isPresent
+                        ? "#" + char.color.getHexString()
+                        : token.colorBorder,
+                      opacity: isPresent ? 1 : 0.3,
+                      borderRadius: isPresent ? 2 : 0,
+                      margin: "0 1px",
+                    }}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  if (timelineData.length === 0) return <Empty description="No Script Data" />;
+
+  return (
+    <div
+      style={{
+        height: "100%",
+        overflowY: "auto",
+        padding: 24,
+        background: token.colorBgContainer,
+      }}
+    >
+      {/* 1. HEADER STATS */}
+      <Row gutter={16} style={{ marginBottom: 24 }}>
+        <Col span={6}>
+          <Statistic
+            title="Total Scenes"
+            value={totalScenes}
+            prefix={<ThunderboltOutlined />}
+          />
+        </Col>
+        <Col span={6}>
+          <Statistic
+            title="Est. Duration"
+            value="~7m"
+            prefix={<ClockCircleOutlined />}
+          />
+        </Col>
+        <Col span={6}>
+          <Statistic
+            title="Key Locations"
+            value={3}
+            prefix={<EnvironmentOutlined />}
+          />
+        </Col>
+        <Col span={6}>
+          <Statistic
+            title="Cast Size"
+            value={characterList.length}
+            prefix={<TeamOutlined />}
+          />
+        </Col>
+      </Row>
+
+      <Divider />
+
+      {/* 2. NARRATIVE FLOW (GANTT) */}
+      <Card
+        size="small"
+        title="Narrative Timeline & Structural Beats"
+        style={{ marginBottom: 24, background: token.colorFillQuaternary }}
+        variant="borderless"
+      >
+        <Text
+          type="secondary"
+          style={{ fontSize: 12, marginBottom: 8, display: "block" }}
+        >
+          Visualizes scene sequence. Markers (<FlagOutlined />) indicate turning
+          points.
+        </Text>
+        <NarrativeGantt />
+        <div
+          style={{
+            marginTop: 8,
+            display: "flex",
+            justifyContent: "space-between",
+          }}
+        >
+          {timelineData
+            .filter((s) => s.structuralBeat)
+            .map((s) => (
+              <Tag key={s.id} color="geekblue">
+                {s.structuralBeat}
+              </Tag>
+            ))}
+        </div>
+      </Card>
+
+      {/* 3. PACING GRAPH */}
+      <Card
+        size="small"
+        title="Pacing & Intensity Rhythm"
+        style={{ marginBottom: 24, background: token.colorFillQuaternary }}
+        variant="borderless"
+      >
+        <Text
+          type="secondary"
+          style={{ fontSize: 12, marginBottom: 8, display: "block" }}
+        >
+          Peaks indicate high tension/action. Valleys indicate exposition/rest.
+        </Text>
+        <PacingGraph />
+      </Card>
+
+      {/* 4. CHARACTER PRESENCE */}
+      <Card
+        size="small"
+        title="Character Presence Threads"
+        style={{ marginBottom: 24, background: token.colorFillQuaternary }}
+        variant="borderless"
+      >
+        <Text
+          type="secondary"
+          style={{ fontSize: 12, marginBottom: 8, display: "block" }}
+        >
+          Tracks who appears when. Thicker lines indicate active presence.
+        </Text>
+        <CharacterThreads />
+      </Card>
+    </div>
+  );
+};
+
+export { Visualizer, Timeline, StoryOverview };

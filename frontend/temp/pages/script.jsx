@@ -10,6 +10,7 @@ import {
   message,
   Tooltip,
   theme,
+  Input,
   Empty,
 } from "antd";
 import {
@@ -23,7 +24,9 @@ import {
   FundProjectionScreenOutlined,
   FieldTimeOutlined,
   TeamOutlined,
-  VideoCameraOutlined, // <--- New Icon
+  VideoCameraOutlined,
+  ProjectOutlined,
+  CodeSandboxOutlined,
 } from "@ant-design/icons";
 
 // YJS Imports
@@ -40,9 +43,13 @@ import {
   SceneOverview,
   CharacterOverview,
 } from "../components/editors";
-import { Visualizer, Timeline } from "../components/visualizations";
+import {
+  Visualizer,
+  Timeline,
+  StoryOverview,
+} from "../components/visualizations";
 import { CenteredLoader } from "../components/loader";
-import { deleteScript } from "../../api";
+import { deleteScript, getScriptById } from "../../api";
 
 const { Text } = Typography;
 
@@ -137,13 +144,20 @@ const MOCK_SCENE_DATA = [
   },
 ];
 
-// Mock Data for Character Overview
+// --- ENRICHED CHARACTER DATA WITH "VISUAL BLUEPRINT" METRICS ---
 const MOCK_CHARACTER_DETAILS = {
   "char-1": {
     role: "Systems Alliance Commander",
+    archetype: "The Protagonist",
     traits: ["Paragon", "Determined", "Leader"],
     description:
       "Shepard displays high levels of stress but maintains composure. Voice analysis indicates suppressed urgency.",
+    metrics: {
+      degreeCentrality: 0.95, // Social hub, connected to everyone
+      betweenness: 0.2, // Low betweenness, they are the destination, not the bridge
+      avgSentiment: 0.1, // Slightly positive (Determination)
+      volatility: 0.8, // High emotional swing
+    },
     scenes: [
       {
         sceneId: "s1",
@@ -165,9 +179,16 @@ const MOCK_CHARACTER_DETAILS = {
   },
   "char-2": {
     role: "Prothean Researcher",
+    archetype: "The Mentor / Confidant",
     traits: ["Intellectual", "Empathetic", "Biotic"],
     description:
       "Liara is exhibiting signs of deep grief. Her biometrics show elevated heart rate during the discussion of Thessia.",
+    metrics: {
+      degreeCentrality: 0.6,
+      betweenness: 0.8, // High betweenness (Gatekeeper of Prothean info)
+      avgSentiment: -0.6, // Negative (Grief)
+      volatility: 0.3, // Consistent low mood
+    },
     scenes: [
       {
         sceneId: "s2",
@@ -184,9 +205,16 @@ const MOCK_CHARACTER_DETAILS = {
   },
   "char-3": {
     role: "Turian Advisor",
+    archetype: "The Lancer",
     traits: ["Loyal", "Tactical", "Calibrating"],
     description:
       "Garrus is acting as a stabilizing force. He is constantly scanning the perimeter.",
+    metrics: {
+      degreeCentrality: 0.7,
+      betweenness: 0.4,
+      avgSentiment: 0.5, // Positive/Supportive
+      volatility: 0.1, // Very stable
+    },
     scenes: [
       {
         sceneId: "s1",
@@ -198,9 +226,16 @@ const MOCK_CHARACTER_DETAILS = {
   },
   "char-4": {
     role: "Quarian Machinist",
+    archetype: "The Specialist",
     traits: ["Tech Expert", "Curious", "Loyal"],
     description:
       "Tali is focused on the tech readings. She is notably avoiding eye contact with the Legion unit.",
+    metrics: {
+      degreeCentrality: 0.5,
+      betweenness: 0.3,
+      avgSentiment: 0.2,
+      volatility: 0.4,
+    },
     scenes: [
       {
         sceneId: "s2",
@@ -212,40 +247,55 @@ const MOCK_CHARACTER_DETAILS = {
   },
 };
 
-// --- NEW MOCK DATA FOR SCENE OVERVIEW ---
+// --- ENRICHED SCENE DATA ---
 const MOCK_SCENE_DETAILS = {
   s1: {
     id: "s1",
     duration: "1m 45s",
     type: "Action",
-    pacing: 85,
+    structuralBeat: "Inciting Incident", //
     synopsis:
       "The Normandy executes a high-gravity insertion. Shepard orders the shuttle drop despite Joker's warnings. The team lands under heavy fire.",
-    focusCharacter: "char-1", // Shepard
-    characters: ["char-1", "char-3"], // Shepard, Garrus
-    composition: { action: 80, dialogue: 20 },
+    focusCharacter: "char-1",
+    characters: ["char-1", "char-3"],
+    metrics: {
+      pacing: 85, // Narrative speed
+      linguisticDensity: 92, // "Staccato" / Fast read (Short sentences)
+      sentiment: -0.6, // High tension/Negative
+      actionRatio: 80, // 80% Action / 20% Dialogue
+    },
   },
   s2: {
     id: "s2",
     duration: "3m 10s",
     type: "Exposition",
-    pacing: 30,
+    structuralBeat: null,
     synopsis:
       "The team regroups in the ruins. Liara discovers ancient Prothean markings that suggest a warning about the Reapers' cycle. Tali analyzes the energy readings.",
-    focusCharacter: "char-2", // Liara
-    characters: ["char-1", "char-2", "char-4"], // Shepard, Liara, Tali
-    composition: { action: 10, dialogue: 90 },
+    focusCharacter: "char-2",
+    characters: ["char-1", "char-2", "char-4"],
+    metrics: {
+      pacing: 30, // Slow, contemplative
+      linguisticDensity: 40, // "Fluid" / Complex sentences
+      sentiment: -0.2, // Uneasy mystery
+      actionRatio: 10, // 90% Dialogue
+    },
   },
   s3: {
     id: "s3",
     duration: "2m 05s",
     type: "Emotional",
-    pacing: 65,
+    structuralBeat: "Climax", //
     synopsis:
       "A standoff with the Reaper Destroyer. Shepard must choose between calling the fleet or sacrificing the localized relay. High emotional stakes.",
     focusCharacter: "char-1",
     characters: ["char-1", "char-2", "char-3", "char-4"],
-    composition: { action: 40, dialogue: 60 },
+    metrics: {
+      pacing: 65,
+      linguisticDensity: 60, // Balanced
+      sentiment: 0.1, // Bitter-sweet/Resolved
+      actionRatio: 40,
+    },
   },
 };
 
@@ -281,13 +331,19 @@ const PANEL_REGISTRY = {
     component: CharacterOverview,
     defaultGroup: "editor-group",
   },
-  // --- NEW REGISTRY ENTRY ---
   scene_overview: {
     id: "scene_overview",
     label: "Scene Overview",
     icon: <VideoCameraOutlined />,
     component: SceneOverview,
-    defaultGroup: "visualizer-group", // Group with visualizer
+    defaultGroup: "visualizer-group",
+  },
+  story_overview: {
+    id: "story_overview",
+    label: "Story Overview",
+    icon: <ProjectOutlined />,
+    component: StoryOverview,
+    defaultGroup: "dashboard-group",
   },
 };
 
@@ -318,6 +374,21 @@ const ScriptPage = () => {
   const { user } = useOutletContext();
   const dockRef = useRef(null);
   const { token } = theme.useToken();
+  const [script, setScript] = useState(null);
+
+  const [loading, setLoading] = useState(true);
+
+  const loadScriptData = async () => {
+    try {
+      setLoading(true);
+      const res = await getScriptById(scriptId);
+      setScript(res.data.script);
+    } catch (err) {
+      message.error("Failed to load settings.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -430,9 +501,8 @@ const ScriptPage = () => {
             sceneData={MOCK_SCENE_DATA}
             characterList={MOCK_VISUALIZER_DATA}
             characterDetails={MOCK_CHARACTER_DETAILS}
-            // --- PASS NEW DATA ---
-            sceneList={MOCK_SCENE_DATA} // For the dropdown
-            sceneDetails={MOCK_SCENE_DETAILS} // For the content
+            sceneList={MOCK_SCENE_DATA}
+            sceneDetails={MOCK_SCENE_DETAILS}
           />
         ),
         closable: false,
@@ -457,7 +527,6 @@ const ScriptPage = () => {
               {
                 id: "visualizer-group",
                 group: "locked",
-                // Added Scene Overview here
                 tabs: [
                   createPanel("visualizer"),
                   createPanel("scene_overview"),
@@ -528,6 +597,7 @@ const ScriptPage = () => {
       const layout = loadLayout();
       setLayoutConfig(layout);
       setDockKey((prev) => prev + 1);
+      loadScriptData();
     }
   }, [scriptId, loadLayout, isSynced, provider]);
 
@@ -637,6 +707,8 @@ const ScriptPage = () => {
     );
   }
 
+  if (loading && !script) return <CenteredLoader />;
+
   return (
     <div
       style={{
@@ -654,34 +726,61 @@ const ScriptPage = () => {
           padding: "8px 16px",
           background: token.colorBgContainer,
           borderBottom: `1px solid ${token.colorBorderSecondary}`,
-          display: "flex",
-          justifyContent: "space-between",
+          // GRID LAYOUT FOR ROBUST CENTERING
+          display: "grid",
+          gridTemplateColumns: "1fr auto 1fr",
           alignItems: "center",
         }}
       >
-        <Space>
-          <Dropdown
-            menu={{ items: menuItems }}
-            trigger={["click"]}
-            placement="bottomLeft"
-            overlayStyle={{ maxHeight: "400px", overflowY: "auto" }}
-          >
-            <Button icon={<AppstoreAddOutlined />}>Add Window</Button>
-          </Dropdown>
-        </Space>
-        <Space>
-          <Tooltip title="Script Settings">
-            <Button
-              type="text"
-              icon={
-                <SettingOutlined
-                  style={{ fontSize: 18, color: token.colorTextSecondary }}
-                />
-              }
-              onClick={() => setIsSettingsOpen(true)}
-            />
-          </Tooltip>
-        </Space>
+        {/* LEFT: Nav Button */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-start",
+            alignItems: "center",
+          }}
+        >
+          <Button
+            type="text"
+            icon={<CodeSandboxOutlined style={{ fontSize: 20 }} />}
+            onClick={() => navigate(`/script`)}
+          />
+          <Text style={{ marginLeft: "12px" }}>{script?.name}</Text>
+        </div>
+
+        {/* CENTER: Search Bar */}
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <Input.Search
+            placeholder="Search script content, characters, or scenes..."
+            allowClear
+            style={{ width: 450 }}
+          />
+        </div>
+
+        {/* RIGHT: Tools & Settings */}
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <Space>
+            <Dropdown
+              menu={{ items: menuItems }}
+              trigger={["click"]}
+              placement="bottomRight"
+              styles={{ root: { maxHeight: "400px", overflowY: "auto" } }}
+            >
+              <Button icon={<AppstoreAddOutlined />}>Add Window</Button>
+            </Dropdown>
+            <Tooltip title="Script Settings">
+              <Button
+                type="text"
+                icon={
+                  <SettingOutlined
+                    style={{ fontSize: 18, color: token.colorTextSecondary }}
+                  />
+                }
+                onClick={() => setIsSettingsOpen(true)}
+              />
+            </Tooltip>
+          </Space>
+        </div>
       </div>
 
       {/* DOCKING AREA */}
@@ -717,9 +816,10 @@ const ScriptPage = () => {
       >
         <div style={{ padding: 24 }}>
           <ScriptSettings
-            scriptId={scriptId}
+            script={script}
             currentUser={user}
             onDelete={handleScriptDeleted}
+            loadScriptData={loadScriptData}
           />
         </div>
       </Modal>
@@ -732,7 +832,7 @@ const GetHeaderProps = (context) => {
     ...HeaderPropsCommon,
     rightItems: [GetDashboardButton(context)],
     breadcrumbs: true,
-    autoHide: true,
+    hidden: true,
   };
 };
 
