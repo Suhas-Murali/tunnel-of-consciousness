@@ -18,6 +18,7 @@ import {
   Divider,
   Space,
   theme,
+  Dropdown,
 } from "antd";
 import {
   ThunderboltOutlined,
@@ -46,54 +47,266 @@ import {
 import { StarterKit } from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCaret from "@tiptap/extension-collaboration-caret";
-import { useEditor, EditorContent } from "@tiptap/react";
-import { BubbleMenu } from "@tiptap/react/menus";
+import { useEditor, EditorContent, ReactNodeViewRenderer } from "@tiptap/react";
+import { BubbleMenu, FloatingMenu } from "@tiptap/react/menus";
 import { CenteredLoader } from "./loader";
+
+import { Extension } from "@tiptap/core";
+import TiptapParagraph from "@tiptap/extension-paragraph";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
+
+import { NodeViewWrapper, NodeViewContent } from "@tiptap/react";
 
 const { Text, Title, Paragraph } = Typography;
 
-// --- CSS Styles (Unchanged) ---
+// --- 1. IMPROVED REGEX PATTERNS ---
+const PATTERNS = {
+  // stricter scene heading detection
+  SCENE: /^(INT|EXT|EST|I\/E|INT\/EXT)[\.\s]/i,
+  TRANSITION: /^(FADE|CUT|DISSOLVE|SMASH|WIPE|TO:)$/i,
+};
+
+// --- 2. UPDATED EXTENSION WITH 'LOCKED' LOGIC ---
+const ScreenplayExtension = TiptapParagraph.extend({
+  priority: 1000,
+
+  addAttributes() {
+    return {
+      scriptType: { default: "action" },
+      // New attribute: prevents auto-parser from overwriting manual selection
+      locked: { default: false },
+    };
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(ScreenplayBlock);
+  },
+
+  addKeyboardShortcuts() {
+    const setType = (type) => () => {
+      return this.editor.commands.updateAttributes("paragraph", {
+        scriptType: type,
+        locked: true, // Force lock so auto-parser doesn't revert it
+      });
+    };
+
+    return {
+      "Mod-1": setType("scene"),
+      "Mod-2": setType("action"),
+      "Mod-3": setType("character"),
+      "Mod-4": setType("dialogue"),
+      "Mod-5": setType("parenthetical"),
+      "Mod-6": setType("transition"),
+
+      // Optional: Shortcut to "Unlock" and let auto-parser take over
+      "Mod-Alt-0": () => {
+        return this.editor.commands.updateAttributes("paragraph", {
+          locked: false,
+        });
+      },
+    };
+  },
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey("screenplay-automator"),
+        appendTransaction: (transactions, oldState, newState) => {
+          if (!transactions.some((tr) => tr.docChanged)) return null;
+          const tr = newState.tr;
+          let modified = false;
+
+          newState.doc.descendants((node, pos) => {
+            if (node.type.name !== "paragraph") return;
+
+            // If user manually set this type, skip auto-classification
+            if (node.attrs.locked) return;
+
+            const text = node.textContent;
+            const currentType = node.attrs.scriptType;
+            let newType = "action";
+
+            // --- IMPROVED LOGIC ---
+            if (PATTERNS.SCENE.test(text)) {
+              newType = "scene";
+            } else if (PATTERNS.TRANSITION.test(text)) {
+              newType = "transition";
+            } else if (
+              text.length > 0 &&
+              text === text.toUpperCase() &&
+              !text.includes(
+                (n) => n === n.toLowerCase() && n !== n.toUpperCase()
+              ) && // Ensure it has letters
+              text.length < 50 && // slightly longer allowance
+              !text.endsWith(":")
+            ) {
+              newType = "character";
+            } else if (text.startsWith("(") && text.endsWith(")")) {
+              newType = "parenthetical";
+            } else {
+              // --- STICKY DIALOGUE LOGIC ---
+              const $pos = newState.doc.resolve(pos);
+              // Look back 1 node
+              const prevNodeIndex = $pos.index($pos.depth) - 1;
+
+              if (prevNodeIndex >= 0) {
+                const prevNode = $pos.parent.child(prevNodeIndex);
+                const prevType = prevNode.attrs.scriptType;
+
+                // If previous was Character or Parenthetical -> Dialogue
+                if (prevType === "character" || prevType === "parenthetical") {
+                  newType = "dialogue";
+                }
+                // If previous was Dialogue AND this isn't empty -> Continued Dialogue
+                else if (prevType === "dialogue" && text.trim().length > 0) {
+                  newType = "dialogue";
+                }
+              }
+            }
+
+            if (currentType !== newType) {
+              tr.setNodeMarkup(pos, undefined, {
+                ...node.attrs,
+                scriptType: newType,
+              });
+              modified = true;
+            }
+          });
+          return modified ? tr : null;
+        },
+      }),
+    ];
+  },
+});
+
+// --- 3. VISUAL OVERHAUL CSS ---
 const getEditorStyles = (token) => `
+  /* RESET & BASIC */
   .ProseMirror {
     outline: none;
     min-height: 100%;
-    padding: 24px 40px;
+    padding: 40px 60px; /* More paper-like padding */
     font-family: 'Courier Prime', 'Courier New', monospace; 
-    font-size: 16px;
-    line-height: 1.6;
-    color: ${token.colorTextLG}; 
+    color: ${token.colorText}; 
     background-color: ${token.colorBgContainer};
-    box-sizing: border-box;
+    counter-reset: line-counter; /* Init Line Counter */
+    font-size: 16px;
+    line-height: 1.2;
   }
-  .ProseMirror p.is-editor-empty:first-child::before {
+
+  /* WRAPPER */
+  .script-block-wrapper {
+    display: flex;
+    align-items: baseline;
+    position: relative;
+    border-radius: 2px;
+    counter-increment: line-counter; /* Increment Line Counter */
+  }
+
+  /* LINE NUMBERS */
+  .script-block-wrapper::before {
+    content: counter(line-counter);
+    position: absolute;
+    left: -40px;
+    width: 30px;
+    text-align: right;
+    color: ${token.colorTextQuaternary};
+    font-size: 10px;
+    font-family: sans-serif;
+    user-select: none;
+    top: 2px;
+  }
+  
+  /* GUTTER CHIP */
+  .script-block-wrapper .type-chip {
+    opacity: 0.0; /* Hidden by default for clean look */
+    transition: opacity 0.2s;
+    cursor: pointer;
+    margin-right: 15px;
+    width: 20px; /* Much smaller gutter */
+    display: flex;
+    justify-content: center;
+    user-select: none;
+    flex-shrink: 0;
+  }
+  
+  /* Show chip on hover or focus */
+  .script-block-wrapper:hover .type-chip,
+  .script-block-wrapper:focus-within .type-chip {
+    opacity: 1;
+  }
+
+  .script-content {
+    flex: 1;
+    outline: none;
+  }
+
+  /* --- SCREENPLAY FORMATTING --- */
+
+  /* SCENE: Bold, Uppercase, Underlined */
+  .script-block-wrapper.type-scene {
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    border-bottom: 2px solid ${token.colorBorder};
+    padding-bottom: 5px;
+  }
+  .script-block-wrapper.type-scene .script-content {
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  /* CHARACTER: Centered (~40% left indent) */
+  .script-block-wrapper.type-character {
+    margin-top: 1rem;
+  }
+  .script-block-wrapper.type-character .script-content {
+    margin-left: 35%; /* Standard screenplay indent */
+    width: 40%;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+
+  /* DIALOGUE: Centered block (~25% margins), Visual Border */
+  .script-block-wrapper.type-dialogue .script-content {
+    margin-left: 10%;
+    margin-right: 10%;
+    width: 80%;
+    /* The visual flair you asked for */
+    border-left: 3px solid ${token.colorBorderSecondary}; 
+    padding-left: 15px;
+  }
+
+  /* PARENTHETICAL: Indented inside dialogue */
+  .script-block-wrapper.type-parenthetical .script-content {
+    margin-left: 30%;
+    width: 40%;
+    font-style: italic;
+    color: ${token.colorTextSecondary};
+  }
+  
+  /* ACTION: Default, full width */
+  .script-block-wrapper.type-action .script-content {
+    margin-bottom: 0.8rem;
+    margin-top: 0.8rem;
+  }
+  
+  /* TRANSITION: Right aligned */
+  .script-block-wrapper.type-transition .script-content {
+    text-align: right;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+
+  /* PLACEHOLDER */
+  .script-content p.is-editor-empty:first-child::before {
     color: ${token.colorTextQuaternary};
     content: attr(data-placeholder);
     float: left;
     height: 0;
     pointer-events: none;
-  }
-  .ProseMirror p { position: relative; margin-bottom: 1rem; }
-  .collaboration-cursor__caret {
-    border-left: 1px solid ${token.colorText};
-    border-right: 1px solid ${token.colorText};
-    margin-left: -1px;
-    margin-right: -1px;
-    pointer-events: none;
-    position: relative;
-    word-break: normal;
-  }
-  .collaboration-cursor__label {
-    border-radius: 3px 3px 3px 0;
-    color: ${token.colorWhite};
-    font-size: 12px;
-    font-weight: 600;
-    left: -1px;
-    padding: 0.1rem 0.3rem;
-    position: absolute;
-    top: -1.4em;
-    user-select: none;
-    white-space: nowrap;
-    z-index: 1;
   }
 `;
 
@@ -112,66 +325,123 @@ const EditorToolbar = ({ editor, token }) => {
       }}
     >
       <Space>
-        <Tooltip title="Bold">
-          <Button
-            type={editor.isActive("bold") ? "primary" : "text"}
-            icon={<BoldOutlined />}
-            onClick={() => editor.chain().focus().toggleBold().run()}
-          />
-        </Tooltip>
-        <Tooltip title="Italic">
-          <Button
-            type={editor.isActive("italic") ? "primary" : "text"}
-            icon={<ItalicOutlined />}
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-          />
-        </Tooltip>
-        <Tooltip title="Strike">
-          <Button
-            type={editor.isActive("strike") ? "primary" : "text"}
-            icon={<StrikethroughOutlined />}
-            onClick={() => editor.chain().focus().toggleStrike().run()}
-          />
-        </Tooltip>
+        {/* Simple Formatting */}
+        <Button
+          type={editor.isActive("bold") ? "primary" : "text"}
+          icon={<BoldOutlined />}
+          onClick={() => editor.chain().focus().toggleBold().run()}
+        />
+        <Button
+          type={editor.isActive("italic") ? "primary" : "text"}
+          icon={<ItalicOutlined />}
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+        />
+
         <Divider orientation="vertical" />
-        <Tooltip title="Undo">
-          <Button
-            type="text"
-            icon={<UndoOutlined />}
-            onClick={() => editor.chain().focus().undo().run()}
-          />
-        </Tooltip>
-        <Tooltip title="Redo">
-          <Button
-            type="text"
-            icon={<RedoOutlined />}
-            onClick={() => editor.chain().focus().redo().run()}
-          />
-        </Tooltip>
+
+        <Button
+          type="text"
+          icon={<UndoOutlined />}
+          onClick={() => editor.chain().focus().undo().run()}
+        />
+        <Button
+          type="text"
+          icon={<RedoOutlined />}
+          onClick={() => editor.chain().focus().redo().run()}
+        />
+
         <Divider orientation="vertical" />
-        <Tooltip title="Identify Character">
-          <Button disabled type="text" icon={<HighlightOutlined />} />
-        </Tooltip>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          Mass Effect: Redemption (Draft 1)
+        </Text>
       </Space>
     </div>
   );
 };
 
-// Now accepts `provider` as a prop
-const ScriptEditor = ({ provider }) => {
-  const { user } = useOutletContext() || {
-    user: { username: "Guest", color: "#555" },
+// --- 4. UPDATED COMPONENT WITH LOCKED HANDLER ---
+const ScreenplayBlock = ({ node, updateAttributes }) => {
+  const { scriptType, locked } = node.attrs;
+
+  // Configuration for each type
+  const typeConfig = {
+    scene: { color: "blue", label: "S", fullLabel: "Scene Heading" },
+    action: { color: "default", label: "A", fullLabel: "Action" },
+    character: { color: "gold", label: "C", fullLabel: "Character" },
+    dialogue: { color: "cyan", label: "D", fullLabel: "Dialogue" },
+    parenthetical: { color: "purple", label: "P", fullLabel: "Parenthetical" },
+    transition: { color: "orange", label: "T", fullLabel: "Transition" },
   };
+
+  const currentConfig = typeConfig[scriptType] || typeConfig["action"];
+
+  // Helper to force type and LOCK it
+  const handleTypeChange = (type) => {
+    updateAttributes({
+      scriptType: type,
+      locked: true, // <--- IMPORTANT: Prevents auto-parser overwrite
+    });
+  };
+
+  const items = Object.keys(typeConfig).map((key) => ({
+    key: key,
+    label: typeConfig[key].fullLabel,
+    onClick: () => handleTypeChange(key),
+  }));
+
+  // Unlock option if manually locked
+  if (locked) {
+    items.push({ type: "divider" });
+    items.push({
+      key: "unlock",
+      label: "Unlock (Auto-detect)",
+      icon: <UndoOutlined />,
+      onClick: () => updateAttributes({ locked: false }), // Let parser take over again
+    });
+  }
+
+  return (
+    <NodeViewWrapper className={`script-block-wrapper type-${scriptType}`}>
+      {/* The Gutter Chip */}
+      <div className="type-chip" contentEditable={false}>
+        <Dropdown menu={{ items }} trigger={["click"]}>
+          <Tag
+            variant="solid"
+            color={locked ? "red" : currentConfig.color} // Red indicates manual override
+            style={{
+              margin: 0,
+              cursor: "pointer",
+              width: "24px",
+              height: "24px",
+              padding: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "10px",
+              borderRadius: "4px",
+            }}
+          >
+            {locked ? <HighlightOutlined /> : currentConfig.label}
+          </Tag>
+        </Dropdown>
+      </div>
+
+      {/* The Actual Text Content */}
+      <NodeViewContent className="script-content" />
+    </NodeViewWrapper>
+  );
+};
+
+const ScriptEditor = ({ provider }) => {
+  const { user } = useOutletContext() || { user: { username: "Guest" } };
   const { token } = theme.useToken();
 
   const editor = useEditor(
     {
-      content: null,
       extensions: [
-        StarterKit.configure({ undoRedo: false }),
-        // Connect to the shared document passed from parent
+        StarterKit.configure({ undoRedo: false, paragraph: false }),
+        ScreenplayExtension,
         Collaboration.configure({ document: provider.document }),
-        // Connect cursors to the shared provider passed from parent
         CollaborationCaret.configure({
           provider,
           user: { name: user.username, color: token.colorPrimary },
@@ -192,7 +462,6 @@ const ScriptEditor = ({ provider }) => {
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          overflow: "hidden",
           backgroundColor: token.colorBgContainer,
         }}
         styles={{
@@ -202,52 +471,24 @@ const ScriptEditor = ({ provider }) => {
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
-            backgroundColor: token.colorBgContainer,
           },
         }}
       >
         <EditorToolbar editor={editor} token={token} />
-
         <div
-          style={{
-            flex: 1,
-            overflowY: "auto",
-            cursor: "text",
-            backgroundColor: token.colorBgContainer,
-          }}
+          style={{ flex: 1, overflowY: "auto", cursor: "text" }}
           onClick={() => editor?.commands.focus()}
         >
-          <EditorContent
-            editor={editor}
-            style={{ minHeight: "100%", height: "100%" }}
-          />
+          <EditorContent editor={editor} style={{ minHeight: "100%" }} />
         </div>
-
-        {editor && (
-          <BubbleMenu editor={editor}>
-            <Card size="small" style={{ boxShadow: token.boxShadowSecondary }}>
-              <Space size={0}>
-                <Button
-                  size="small"
-                  type="text"
-                  icon={<BoldOutlined />}
-                  onClick={() => editor.chain().focus().toggleBold().run()}
-                />
-                <Button
-                  size="small"
-                  type="text"
-                  icon={<ItalicOutlined />}
-                  onClick={() => editor.chain().focus().toggleItalic().run()}
-                />
-              </Space>
-            </Card>
-          </BubbleMenu>
-        )}
       </Card>
     </>
   );
 };
 
+export { ScriptEditor };
+// Note: Export the EditorWindow/CharacterOverview/SceneOverview as before
+// or import them here if they are in the same file.
 // The Window Wrapper
 const EditorWindow = ({ provider }) => {
   if (!provider) {
