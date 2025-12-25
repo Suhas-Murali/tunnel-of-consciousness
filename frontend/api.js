@@ -93,3 +93,50 @@ export const removeCollaborator = (id, userId) =>
  */
 export const transferOwnership = (id, newOwnerId) =>
   API.post(`/script/${id}/transfer`, { newOwnerId });
+
+
+
+// api.js
+const AI_API_URL = "http://localhost:8000";
+
+export const analyzeSceneAI = async (id, text) => {
+  try {
+    const res = await fetch(`${AI_API_URL}/analyze_scene`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, text }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.error("AI Scene Analysis failed", e);
+    return null;
+  }
+};
+
+export const analyzeNetworkAI = async (interactions) => {
+  try {
+    const res = await fetch(`${AI_API_URL}/analyze_network`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ interactions }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.error("AI Network Analysis failed", e);
+    return null;
+  }
+};
+
+export const analyzeEmotionAI = async (text) => {
+  try {
+    const res = await fetch(`${AI_API_URL}/analyze_emotion`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.error("AI Emotion Analysis failed", e);
+    return null;
+  }
+};

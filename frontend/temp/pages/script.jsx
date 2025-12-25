@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
-import * as THREE from "three";
 import {
   Button,
   Dropdown,
@@ -42,265 +41,17 @@ import {
   EditorWindow,
   SceneOverview,
   CharacterOverview,
-} from "../components/editors";
-import {
   Visualizer,
   Timeline,
   StoryOverview,
-} from "../components/visualizations";
+} from "../components/editor";
 import { CenteredLoader } from "../components/loader";
 import { deleteScript, getScriptById } from "../../api";
 
 const { Text } = Typography;
 
 // ==========================================
-// 1. DATA & CONFIG
-// ==========================================
-
-const VISUALIZER_CONFIG = {
-  length: 100,
-  radius: 6,
-  baseThickness: 0.05,
-};
-
-const MOCK_VISUALIZER_DATA = [
-  {
-    id: "char-1",
-    name: "Commander Shepard",
-    emotion: "Determination",
-    color: new THREE.Color("#ff0040"),
-    significance: 2.0,
-    points: [
-      [-2, 1, 0],
-      [-2.5, 2, 25],
-      [-1.5, 0.5, 50],
-      [-2, 1, 75],
-      [-2, 3, 100],
-    ],
-  },
-  {
-    id: "char-2",
-    name: "Liara T'Soni",
-    emotion: "Grief",
-    color: new THREE.Color("#0040ff"),
-    significance: 0.8,
-    points: [
-      [2, -1, 0],
-      [2.2, -1.5, 25],
-      [1.8, -0.5, 50],
-      [2, -2, 75],
-      [2.5, -1, 100],
-    ],
-  },
-  {
-    id: "char-3",
-    name: "Garrus Vakarian",
-    emotion: "Supportive",
-    color: new THREE.Color("#00ff80"),
-    significance: 1.2,
-    points: [
-      [0.5, 3, 0],
-      [0.8, 2.8, 25],
-      [0.2, 3.2, 50],
-      [0.5, 3, 100],
-    ],
-  },
-  {
-    id: "char-4",
-    name: "Tali'Zorah",
-    emotion: "Curiosity",
-    color: new THREE.Color("#ffff00"),
-    significance: 1.2,
-    points: [
-      [0.8, 3.2, 0],
-      [1.1, 3.0, 25],
-      [0.5, 3.4, 50],
-      [0.8, 3.2, 100],
-    ],
-  },
-];
-
-const MOCK_SCENE_DATA = [
-  {
-    id: "s1",
-    name: "Scene 1: The Arrival",
-    start: 0,
-    end: 20,
-    color: "#faad14",
-  },
-  {
-    id: "s2",
-    name: "Scene 2: Discussion",
-    start: 25,
-    end: 55,
-    color: "#52c41a",
-  },
-  {
-    id: "s3",
-    name: "Scene 3: The Conflict",
-    start: 60,
-    end: 90,
-    color: "#ff4d4f",
-  },
-];
-
-// --- ENRICHED CHARACTER DATA WITH "VISUAL BLUEPRINT" METRICS ---
-const MOCK_CHARACTER_DETAILS = {
-  "char-1": {
-    role: "Systems Alliance Commander",
-    archetype: "The Protagonist",
-    traits: ["Paragon", "Determined", "Leader"],
-    description:
-      "Shepard displays high levels of stress but maintains composure. Voice analysis indicates suppressed urgency.",
-    metrics: {
-      degreeCentrality: 0.95, // Social hub, connected to everyone
-      betweenness: 0.2, // Low betweenness, they are the destination, not the bridge
-      avgSentiment: 0.1, // Slightly positive (Determination)
-      volatility: 0.8, // High emotional swing
-    },
-    scenes: [
-      {
-        sceneId: "s1",
-        sceneName: "The Arrival",
-        dialogueCount: 3,
-        dialogues: [
-          "We have to land now, Joker.",
-          "I don't care about the regulations.",
-          "Get us on the ground.",
-        ],
-      },
-      {
-        sceneId: "s3",
-        sceneName: "The Conflict",
-        dialogueCount: 2,
-        dialogues: ["This ends here!", "Make your choice."],
-      },
-    ],
-  },
-  "char-2": {
-    role: "Prothean Researcher",
-    archetype: "The Mentor / Confidant",
-    traits: ["Intellectual", "Empathetic", "Biotic"],
-    description:
-      "Liara is exhibiting signs of deep grief. Her biometrics show elevated heart rate during the discussion of Thessia.",
-    metrics: {
-      degreeCentrality: 0.6,
-      betweenness: 0.8, // High betweenness (Gatekeeper of Prothean info)
-      avgSentiment: -0.6, // Negative (Grief)
-      volatility: 0.3, // Consistent low mood
-    },
-    scenes: [
-      {
-        sceneId: "s2",
-        sceneName: "Discussion",
-        dialogueCount: 4,
-        dialogues: [
-          "The patterns... they match the Prothean archives.",
-          "I can't believe it's gone.",
-          "We must focus on the Crucible.",
-          "It is our only hope.",
-        ],
-      },
-    ],
-  },
-  "char-3": {
-    role: "Turian Advisor",
-    archetype: "The Lancer",
-    traits: ["Loyal", "Tactical", "Calibrating"],
-    description:
-      "Garrus is acting as a stabilizing force. He is constantly scanning the perimeter.",
-    metrics: {
-      degreeCentrality: 0.7,
-      betweenness: 0.4,
-      avgSentiment: 0.5, // Positive/Supportive
-      volatility: 0.1, // Very stable
-    },
-    scenes: [
-      {
-        sceneId: "s1",
-        sceneName: "The Arrival",
-        dialogueCount: 2,
-        dialogues: ["Scoop looks clear, Commander.", "Just like old times."],
-      },
-    ],
-  },
-  "char-4": {
-    role: "Quarian Machinist",
-    archetype: "The Specialist",
-    traits: ["Tech Expert", "Curious", "Loyal"],
-    description:
-      "Tali is focused on the tech readings. She is notably avoiding eye contact with the Legion unit.",
-    metrics: {
-      degreeCentrality: 0.5,
-      betweenness: 0.3,
-      avgSentiment: 0.2,
-      volatility: 0.4,
-    },
-    scenes: [
-      {
-        sceneId: "s2",
-        sceneName: "Discussion",
-        dialogueCount: 2,
-        dialogues: ["These readings are off the charts.", "Keelah se'lai."],
-      },
-    ],
-  },
-};
-
-// --- ENRICHED SCENE DATA ---
-const MOCK_SCENE_DETAILS = {
-  s1: {
-    id: "s1",
-    duration: "1m 45s",
-    type: "Action",
-    structuralBeat: "Inciting Incident", //
-    synopsis:
-      "The Normandy executes a high-gravity insertion. Shepard orders the shuttle drop despite Joker's warnings. The team lands under heavy fire.",
-    focusCharacter: "char-1",
-    characters: ["char-1", "char-3"],
-    metrics: {
-      pacing: 85, // Narrative speed
-      linguisticDensity: 92, // "Staccato" / Fast read (Short sentences)
-      sentiment: -0.6, // High tension/Negative
-      actionRatio: 80, // 80% Action / 20% Dialogue
-    },
-  },
-  s2: {
-    id: "s2",
-    duration: "3m 10s",
-    type: "Exposition",
-    structuralBeat: null,
-    synopsis:
-      "The team regroups in the ruins. Liara discovers ancient Prothean markings that suggest a warning about the Reapers' cycle. Tali analyzes the energy readings.",
-    focusCharacter: "char-2",
-    characters: ["char-1", "char-2", "char-4"],
-    metrics: {
-      pacing: 30, // Slow, contemplative
-      linguisticDensity: 40, // "Fluid" / Complex sentences
-      sentiment: -0.2, // Uneasy mystery
-      actionRatio: 10, // 90% Dialogue
-    },
-  },
-  s3: {
-    id: "s3",
-    duration: "2m 05s",
-    type: "Emotional",
-    structuralBeat: "Climax", //
-    synopsis:
-      "A standoff with the Reaper Destroyer. Shepard must choose between calling the fleet or sacrificing the localized relay. High emotional stakes.",
-    focusCharacter: "char-1",
-    characters: ["char-1", "char-2", "char-3", "char-4"],
-    metrics: {
-      pacing: 65,
-      linguisticDensity: 60, // Balanced
-      sentiment: 0.1, // Bitter-sweet/Resolved
-      actionRatio: 40,
-    },
-  },
-};
-
-// ==========================================
-// 2. PANEL REGISTRY
+// 1. PANEL REGISTRY
 // ==========================================
 const PANEL_REGISTRY = {
   editor: {
@@ -348,7 +99,7 @@ const PANEL_REGISTRY = {
 };
 
 // ==========================================
-// 3. CSS STYLES
+// 2. CSS STYLES
 // ==========================================
 const getDockThemeStyles = (token) => `
   .dock-layout { background: ${token.colorBgLayout} !important; }
@@ -375,8 +126,10 @@ const ScriptPage = () => {
   const dockRef = useRef(null);
   const { token } = theme.useToken();
   const [script, setScript] = useState(null);
-
   const [loading, setLoading] = useState(true);
+
+  // State to track the currently selected panel
+  const [activePanelId, setActivePanelId] = useState(null);
 
   const loadScriptData = async () => {
     try {
@@ -489,27 +242,37 @@ const ScriptPage = () => {
       return {
         id: id,
         title: createTabTitle(registryItem.label, id),
+        // Wrap the component in a div that handles activation and visual feedback
         content: (
-          <Component
-            provider={provider}
-            scriptId={scriptId}
-            token={token}
-            user={user}
-            documentName={scriptId}
-            visualizerData={MOCK_VISUALIZER_DATA}
-            visualizerConfig={VISUALIZER_CONFIG}
-            sceneData={MOCK_SCENE_DATA}
-            characterList={MOCK_VISUALIZER_DATA}
-            characterDetails={MOCK_CHARACTER_DETAILS}
-            sceneList={MOCK_SCENE_DATA}
-            sceneDetails={MOCK_SCENE_DETAILS}
-          />
+          <div
+            onClickCapture={() => setActivePanelId(id)}
+            style={{
+              height: "100%",
+              width: "100%",
+              display: "flex",
+              flexDirection: "column",
+              // Visual indicator for active panel
+              boxShadow:
+                activePanelId === id
+                  ? `inset 0 0 0 2px ${token.colorPrimary}`
+                  : "none",
+              transition: "box-shadow 0.2s ease",
+            }}
+          >
+            <Component
+              provider={provider}
+              scriptId={scriptId}
+              token={token}
+              user={user}
+              documentName={scriptId}
+            />
+          </div>
         ),
         closable: false,
         group: "locked",
       };
     },
-    [scriptId, token, createTabTitle, provider, user]
+    [scriptId, token, createTabTitle, provider, user, activePanelId]
   );
 
   // --- LAYOUT STORAGE & HYDRATION ---
@@ -601,6 +364,17 @@ const ScriptPage = () => {
     }
   }, [scriptId, loadLayout, isSynced, provider]);
 
+  // Force layout update when activePanelId changes to ensure visual feedback renders
+  useEffect(() => {
+    if (dockRef.current && layoutConfig) {
+      // Re-hydrate the current layout state to update the `content` prop with the new active style
+      const currentLayout = dockRef.current.saveLayout();
+      const hydrated = hydrateLayout(currentLayout);
+      dockRef.current.loadLayout(hydrated);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePanelId]);
+
   const handleLayoutChange = (newLayout) => {
     const key = getStorageKey(scriptId);
     const cleanJSON = JSON.stringify(newLayout, (k, v) => {
@@ -615,6 +389,18 @@ const ScriptPage = () => {
     if (!dock) return;
 
     const newPanel = createPanel(type);
+
+    // Logic: Try to add to the active panel if it exists
+    if (activePanelId) {
+      // We need to verify the panel still exists in the dock
+      const targetPanel = dock.find(activePanelId);
+      if (targetPanel) {
+        dock.dockMove(newPanel, activePanelId, direction);
+        return;
+      }
+    }
+
+    // Fallback: Default logic if no active panel or active panel lost
     const layout = dock.saveLayout ? dock.saveLayout() : dock.layout;
 
     const hasAnyTabs = (node) => {
@@ -726,7 +512,6 @@ const ScriptPage = () => {
           padding: "8px 16px",
           background: token.colorBgContainer,
           borderBottom: `1px solid ${token.colorBorderSecondary}`,
-          // GRID LAYOUT FOR ROBUST CENTERING
           display: "grid",
           gridTemplateColumns: "1fr auto 1fr",
           alignItems: "center",

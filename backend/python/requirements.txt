@@ -3,3 +3,7 @@ uvicorn
 pydantic
 transformers
 torch
+networkx
+numpy
+scipy
+textstat
