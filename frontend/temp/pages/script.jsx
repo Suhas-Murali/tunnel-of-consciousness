@@ -374,7 +374,7 @@ const ScriptPage = () => {
             background: token.colorBgContainer,
             borderBottom: `1px solid ${token.colorBorderSecondary}`,
             display: "grid",
-            gridTemplateColumns: "1fr auto 1fr",
+            gridTemplateColumns: "1fr 1fr",
             alignItems: "center",
           }}
         >
@@ -386,11 +386,6 @@ const ScriptPage = () => {
             />
             <Text style={{ marginLeft: "12px" }}>{script?.name}</Text>
           </div>
-          <Input.Search
-            placeholder="Search..."
-            allowClear
-            style={{ width: 450 }}
-          />
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <Space>
               <Dropdown menu={{ items: menuItems }} trigger={["click"]}>
