@@ -1,44 +1,43 @@
-import React, { useRef, useMemo, useState, useEffect } from "react";
+import React, { useRef, useMemo, useState, useEffect, useContext } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame, useThree, extend } from "@react-three/fiber";
 import { shaderMaterial } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
+import { Button, Card, Tag, Typography, Space, Empty, theme } from "antd";
 import {
-  Button,
-  Result,
-  Card,
-  Tag,
-  Typography,
-  Space,
-} from "antd";
-import {
-  InfoCircleOutlined,
   EyeOutlined,
-  ArrowLeftOutlined,
   EyeInvisibleOutlined,
-  ReloadOutlined,
   ArrowRightOutlined,
+  ArrowLeftOutlined,
+  AimOutlined,
 } from "@ant-design/icons";
+
+// Import the Context
+import { ScriptStateContext } from "../contexts";
 
 const { Text } = Typography;
 
 // ==========================================
-// 1. CONFIGURATION & UTILS
+// 1. CONFIGURATION
 // ==========================================
 
-
 const SECTOR_CONFIG = {
-  joy: { angle: 0, color: "#FFD700" },
-  trust: { angle: Math.PI * 0.25, color: "#00FF7F" },
-  fear: { angle: Math.PI * 0.5, color: "#228B22" },
-  surprise: { angle: Math.PI * 0.75, color: "#00BFFF" },
-  sadness: { angle: Math.PI, color: "#4169E1" },
-  disgust: { angle: Math.PI * 1.25, color: "#9932CC" },
-  anger: { angle: Math.PI * 1.5, color: "#FF4500" },
-  anticipation: { angle: Math.PI * 1.75, color: "#FF8C00" },
+  joy: { angle: 0, color: "#FFD700", label: "Joy" },
+  trust: { angle: Math.PI * 0.25, color: "#00FF7F", label: "Trust" },
+  fear: { angle: Math.PI * 0.5, color: "#228B22", label: "Fear" },
+  surprise: { angle: Math.PI * 0.75, color: "#00BFFF", label: "Surprise" },
+  sadness: { angle: Math.PI, color: "#4169E1", label: "Sadness" },
+  disgust: { angle: Math.PI * 1.25, color: "#9932CC", label: "Disgust" },
+  anger: { angle: Math.PI * 1.5, color: "#FF4500", label: "Anger" },
+  anticipation: {
+    angle: Math.PI * 1.75,
+    color: "#FF8C00",
+    label: "Anticipation",
+  },
 };
 
 const EMOTIONS = Object.keys(SECTOR_CONFIG);
+const Z_SCALE = 5; // 1 second of script = 5 units of depth
 
 const pseudoRandom = (seed) => {
   let x = Math.sin(seed++) * 10000;
@@ -49,55 +48,68 @@ const pseudoRandom = (seed) => {
 // 2. SHADERS
 // ==========================================
 
-const BloomStrandMaterial = shaderMaterial(
+const FocusingStrandMaterial = shaderMaterial(
   {
     uTime: 0,
     uColor: new THREE.Color(1, 1, 1),
     uCurrentZ: 0,
-    uSignificance: 1.0,
+    uHover: 0,
   },
   `varying vec2 vUv; varying vec3 vPosition;
    void main() { vUv = uv; vPosition = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-  `uniform float uCurrentZ; uniform vec3 uColor; uniform float uSignificance; varying vec3 vPosition;
+  `uniform float uCurrentZ; uniform vec3 uColor; uniform float uHover; varying vec3 vPosition;
    void main() {
       float dist = abs(vPosition.z - uCurrentZ);
-      float proximity = 1.0 - smoothstep(0.0, 25.0, dist);
-      vec3 finalColor = mix(uColor * 0.2, uColor * 10.0 * uSignificance, proximity);
-      gl_FragColor = vec4(finalColor, proximity); 
+      float proximity = 1.0 - smoothstep(0.0, 40.0, dist); 
+      vec3 glow = uColor * (0.5 + (proximity * 2.0) + (uHover * 3.0));
+      float opacity = 1.0 - smoothstep(50.0, 150.0, dist);
+      gl_FragColor = vec4(glow, opacity); 
    }`
 );
-extend({ BloomStrandMaterial });
+extend({ FocusingStrandMaterial });
 
 // ==========================================
-// 3. 3D SUB-COMPONENTS
+// 3. GEOMETRY
 // ==========================================
 
-const generateStrandPoints = (char, length) => {
+const generateStrandCurve = (char, length) => {
   const points = [];
   const seed = char.name.length;
-  const emotionIdx = Math.floor(pseudoRandom(seed) * EMOTIONS.length);
-  const assignedEmotion = char.emotion || EMOTIONS[emotionIdx];
-  const sector = SECTOR_CONFIG[assignedEmotion];
 
+  let rawEmotion = (char.emotion || "").toLowerCase();
+  const assignedEmotion = SECTOR_CONFIG[rawEmotion]
+    ? rawEmotion
+    : EMOTIONS[Math.floor(pseudoRandom(seed) * EMOTIONS.length)];
+  const sector = SECTOR_CONFIG[assignedEmotion];
   const baseAngle = sector.angle;
 
-  for (let z = 0; z <= length; z += 2) {
-    const angleWobble = (pseudoRandom(z + seed) - 0.5) * 0.6;
+  for (let z = 0; z <= length; z += 5) {
+    const angleWobble = (pseudoRandom(z + seed) - 0.5) * 0.3;
     const currentAngle = baseAngle + angleWobble;
-    const radiusBase = 6;
-    const radiusWobble = (pseudoRandom(z * 2 + seed) - 0.5) * 3;
-    const x = Math.cos(currentAngle) * (radiusBase + radiusWobble);
-    const y = Math.sin(currentAngle) * (radiusBase + radiusWobble);
+    const radiusBase = 8;
+    const radiusWobble = (pseudoRandom(z * 2 + seed) - 0.5) * 1.5;
+    const r = radiusBase + radiusWobble;
+    const x = Math.cos(currentAngle) * r;
+    const y = Math.sin(currentAngle) * r;
     points.push(new THREE.Vector3(x, y, z));
   }
-  return { points, emotion: assignedEmotion };
+
+  return {
+    curve: new THREE.CatmullRomCurve3(points),
+    emotion: assignedEmotion,
+    color: char.color || SECTOR_CONFIG[assignedEmotion].color,
+  };
 };
 
-const Tunnel = ({ length }) => (
-  <mesh position={[0, 0, length / 2]}>
-    <cylinderGeometry args={[12, 12, length, 32, 1, true]} />
+// ==========================================
+// 4. SUB-COMPONENTS
+// ==========================================
+
+const TunnelMesh = ({ length }) => (
+  <mesh position={[0, 0, length / 2]} rotation={[Math.PI / 2, 0, 0]}>
+    <cylinderGeometry args={[15, 15, length, 32, 1, true]} />
     <meshBasicMaterial
-      color="#080808"
+      color="#1f1f1f"
       side={THREE.BackSide}
       wireframe
       transparent
@@ -108,40 +120,45 @@ const Tunnel = ({ length }) => (
 
 const CharacterStrand = ({ char, length, cameraZ, onHover, onClick }) => {
   const materialRef = useRef();
-  const { curve, emotion } = useMemo(() => {
-    const { points, emotion } = generateStrandPoints(char, length);
-    return { curve: new THREE.CatmullRomCurve3(points), emotion };
-  }, [char, length]);
+  const { curve, emotion, color } = useMemo(
+    () => generateStrandCurve(char, length),
+    [char, length]
+  );
+  const [hovered, setHover] = useState(false);
 
-  useFrame((state) => {
+  useFrame(() => {
     if (materialRef.current) {
       materialRef.current.uCurrentZ = cameraZ.current;
-      materialRef.current.uTime = state.clock.elapsedTime;
+      materialRef.current.uHover = hovered ? 1.0 : 0.0;
     }
   });
 
-  const color = new THREE.Color(SECTOR_CONFIG[emotion].color);
   return (
     <group>
       <mesh>
-        <tubeGeometry args={[curve, 128, 0.1, 8, false]} />
-        <bloomStrandMaterial
+        <tubeGeometry args={[curve, 128, 0.15, 8, false]} />
+        <focusingStrandMaterial
           ref={materialRef}
-          uColor={color}
-          uSignificance={1.0}
+          uColor={new THREE.Color(color)}
           transparent
-          toneMapped={false}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
         />
       </mesh>
       <mesh
         visible={false}
         onPointerOver={(e) => {
           e.stopPropagation();
-          document.body.style.cursor = "pointer";
-          onHover(true, { ...char, emotion }, e.clientX, e.clientY);
+          setHover(true);
+          onHover(
+            true,
+            { name: char.name, emotion, color },
+            e.clientX,
+            e.clientY
+          );
         }}
         onPointerOut={() => {
-          document.body.style.cursor = "auto";
+          setHover(false);
           onHover(false, null, 0, 0);
         }}
         onClick={(e) => {
@@ -149,100 +166,89 @@ const CharacterStrand = ({ char, length, cameraZ, onHover, onClick }) => {
           onClick(char);
         }}
       >
-        <tubeGeometry args={[curve, 64, 0.8, 8, false]} />
+        <tubeGeometry args={[curve, 64, 1.5, 8, false]} />
         <meshBasicMaterial color="white" />
       </mesh>
     </group>
   );
 };
 
-const Rig = ({ length, onEndReached, cameraZ, onPan, resetTrigger }) => {
+// --- UPDATED RIG: Driven by Local Time ---
+const Rig = ({ localTime, onScrollDelta, onPan, onScrollPos }) => {
   const { camera, gl } = useThree();
-  const targetZ = useRef(0);
   const currentZ = useRef(0);
   const isDragging = useRef(false);
   const prevMouse = useRef({ x: 0, y: 0 });
 
-  // Handle Camera Reset (Snap to Center)
   useEffect(() => {
-    camera.rotation.set(0, 0, 0);
-  }, [resetTrigger, camera]);
-
-  // Initial Reset
-  useEffect(() => {
-    targetZ.current = 0;
-    currentZ.current = 0;
-    camera.rotation.set(0, 0, 0);
-    cameraZ.current = 0;
-  }, [length, cameraZ, camera]);
+    camera.rotation.set(0, Math.PI, 0);
+  }, [camera]);
 
   useEffect(() => {
+    const canvas = gl.domElement;
+
+    // SCROLL: Calculates Delta and sends to Parent (Visualizer -> Context)
     const handleWheel = (e) => {
       e.preventDefault();
-      targetZ.current = Math.max(
-        0,
-        Math.min(length, targetZ.current + e.deltaY * 0.05)
-      );
+      const deltaSeconds = e.deltaY * 0.01; // Adjust sensitivity
+      if (onScrollDelta) onScrollDelta(deltaSeconds);
     };
 
+    // PAN: Local camera rotation
     const handleDown = (e) => {
       if (e.button === 2) {
         isDragging.current = true;
         prevMouse.current = { x: e.clientX, y: e.clientY };
-        // Notify parent that user is panning
         if (onPan) onPan();
       }
     };
-
     const handleUp = () => (isDragging.current = false);
-
     const handleMove = (e) => {
       if (isDragging.current) {
         const deltaX = e.clientX - prevMouse.current.x;
         const deltaY = e.clientY - prevMouse.current.y;
-        camera.rotation.y -= deltaX * 0.002;
+        camera.rotation.y += deltaX * 0.002;
         camera.rotation.x = Math.max(
-          -Math.PI / 3,
-          Math.min(Math.PI / 3, camera.rotation.x - deltaY * 0.002)
+          -0.5,
+          Math.min(0.5, camera.rotation.x - deltaY * 0.002)
         );
         prevMouse.current = { x: e.clientX, y: e.clientY };
       }
     };
+    const handleContext = (e) => e.preventDefault();
 
-    const handleContextMenu = (e) => e.preventDefault();
-    const canvas = gl.domElement;
     canvas.addEventListener("wheel", handleWheel, { passive: false });
     canvas.addEventListener("mousedown", handleDown);
     window.addEventListener("mouseup", handleUp);
     window.addEventListener("mousemove", handleMove);
-    canvas.addEventListener("contextmenu", handleContextMenu);
+    canvas.addEventListener("contextmenu", handleContext);
+
     return () => {
       canvas.removeEventListener("wheel", handleWheel);
       canvas.removeEventListener("mousedown", handleDown);
       window.removeEventListener("mouseup", handleUp);
       window.removeEventListener("mousemove", handleMove);
-      canvas.removeEventListener("contextmenu", handleContextMenu);
+      canvas.removeEventListener("contextmenu", handleContext);
     };
-  }, [camera, gl, length, onPan]);
+  }, [camera, gl, onPan, onScrollDelta]);
 
+  // SYNC: Move Camera to match Local Time
   useFrame(() => {
-    currentZ.current = THREE.MathUtils.lerp(
-      currentZ.current,
-      targetZ.current,
-      0.08
-    );
+    const targetZ = localTime * Z_SCALE;
+    currentZ.current = THREE.MathUtils.lerp(currentZ.current, targetZ, 0.1);
     camera.position.z = currentZ.current;
-    cameraZ.current = currentZ.current;
-    onEndReached(currentZ.current > length - 10);
+
+    if (onScrollPos) onScrollPos(currentZ.current);
   });
+
   return null;
 };
 
 // ==========================================
-// 4. UI COMPONENTS (HTML OVERLAYS)
+// 5. OVERLAYS
 // ==========================================
 
-const EmotionOverlay = ({ visible }) => {
+const SectorOverlay = ({ visible }) => {
   if (!visible) return null;
   return (
     <div
@@ -260,49 +266,48 @@ const EmotionOverlay = ({ visible }) => {
         width="600"
         height="600"
         viewBox="0 0 100 100"
-        style={{ filter: "drop-shadow(0px 0px 4px rgba(0,0,0,1))" }}
+        style={{ opacity: 0.6 }}
       >
         <circle
           cx="50"
           cy="50"
-          r="45"
+          r="48"
           fill="none"
           stroke="#fff"
-          strokeWidth="0.5"
-          strokeOpacity="0.5"
-          strokeDasharray="1,2"
+          strokeWidth="0.2"
+          strokeDasharray="2,2"
         />
         {EMOTIONS.map((emo) => {
-          const { angle, color } = SECTOR_CONFIG[emo];
-          const r = 40;
-          const x = 50 + r * Math.cos(angle);
-          const y = 50 - r * Math.sin(angle);
-
+          const { angle, color, label } = SECTOR_CONFIG[emo];
+          const rText = 42;
+          const x = 50 + rText * Math.cos(angle);
+          // FIX: Subtract sin(angle) because SVG Y-axis is inverted relative to 3D Y-axis
+          const y = 50 - rText * Math.sin(angle);
+          const y2End = 50 - 48 * Math.sin(angle);
           return (
             <g key={emo}>
               <line
                 x1="50"
                 y1="50"
-                x2={50 + 45 * Math.cos(angle)}
-                y2={50 - 45 * Math.sin(angle)}
+                x2={50 + 48 * Math.cos(angle)}
+                y2={y2End}
                 stroke={color}
-                strokeWidth="0.2"
-                strokeOpacity="0.8"
+                strokeWidth="0.1"
               />
               <text
                 x={x}
                 y={y}
                 fill={color}
-                fontSize="2.5"
-                fontWeight="bold"
+                fontSize="3"
                 textAnchor="middle"
                 alignmentBaseline="middle"
+                fontWeight="bold"
                 style={{
                   textTransform: "uppercase",
-                  textShadow: "1px 1px 2px #000",
+                  textShadow: "0 0 2px black",
                 }}
               >
-                {emo}
+                {label}
               </text>
             </g>
           );
@@ -313,28 +318,24 @@ const EmotionOverlay = ({ visible }) => {
 };
 
 // ==========================================
-// 5. MAIN COMPONENT EXPORT
+// 6. MAIN COMPONENT
 // ==========================================
 
 export const Visualizer = ({ provider }) => {
+  // CONSUME CONTEXT for 2-way binding
+  const { currentTime, setCurrentTime, setFocusRequest } =
+    useContext(ScriptStateContext);
+
   const [scenes, setScenes] = useState([]);
   const [allCharacters, setAllCharacters] = useState([]);
-  const [sceneIndex, setSceneIndex] = useState(0);
 
-  const [tooltip, setTooltip] = useState({
-    visible: false,
-    x: 0,
-    y: 0,
-    data: null,
-  });
   const [showOverlay, setShowOverlay] = useState(true);
-  const [atEndOfScene, setAtEndOfScene] = useState(false);
+  const [tooltip, setTooltip] = useState(null);
+  const [atSceneEnd, setAtSceneEnd] = useState(false);
 
-  // Triggers camera reset in Rig
-  const [resetStack, setResetStack] = useState(0);
+  const cameraZRef = useRef(0);
 
-  const cameraZ = useRef(0);
-
+  // Load Data
   useEffect(() => {
     if (!provider) return;
     const map = provider.document.getMap("script_analysis");
@@ -347,35 +348,98 @@ export const Visualizer = ({ provider }) => {
     return () => map.unobserve(updateHandler);
   }, [provider]);
 
-  const activeScene = scenes[sceneIndex];
-  const sceneStrands = useMemo(() => {
-    if (!activeScene) return [];
+  // Calculate Scene & Local Time
+  const { activeScene, sceneIndex, sceneLength, activeSceneStart } =
+    useMemo(() => {
+      if (scenes.length === 0)
+        return {
+          activeScene: null,
+          sceneIndex: -1,
+          sceneLength: 100,
+          activeSceneStart: 0,
+        };
 
+      let accumulated = 0;
+      for (let i = 0; i < scenes.length; i++) {
+        const s = scenes[i];
+        const duration = s.durationSecs || 10;
+        if (
+          currentTime >= accumulated &&
+          currentTime < accumulated + duration
+        ) {
+          return {
+            activeScene: s,
+            sceneIndex: i,
+            sceneLength: duration * Z_SCALE,
+            activeSceneStart: accumulated,
+          };
+        }
+        accumulated += duration;
+      }
+      // Fallback: End of script
+      return {
+        activeScene: scenes[scenes.length - 1],
+        sceneIndex: scenes.length - 1,
+        sceneLength: 100,
+        activeSceneStart: accumulated,
+      };
+    }, [scenes, currentTime]);
+
+  const strands = useMemo(() => {
+    if (!activeScene) return [];
     const charList = Array.isArray(activeScene.characters)
       ? activeScene.characters
       : Array.from(activeScene.characters || []);
-
     return allCharacters.filter(
       (c) => charList.includes(c.name) || charList.includes(c.id)
     );
   }, [activeScene, allCharacters]);
 
-  const sceneLength = 100 + (activeScene?.durationSecs || 0);
+  // --- INTERACTION HANDLERS ---
 
-  // --- HANDLERS ---
-  const handleToggleOverlay = () => {
-    const nextState = !showOverlay;
-    setShowOverlay(nextState);
-    if (nextState === true) {
-      // Snap camera back to center if turning overlay ON
-      setResetStack((s) => s + 1);
+  // 1. Scroll: Update Global Time
+  const handleScrollDelta = (delta) => {
+    const newTime = Math.max(0, currentTime + delta);
+    setCurrentTime(newTime);
+  };
+
+  // 2. Camera Update Feedback
+  const handleScrollPos = (z) => {
+    cameraZRef.current = z;
+    setAtSceneEnd(z > sceneLength - 20); // Show next button if near end
+  };
+
+  // 3. Click Strand: Focus in Editor
+  const onStrandClick = (char) => {
+    setFocusRequest({
+      type: "character-focus",
+      characterId: char.id,
+      characterName: char.name,
+      timestamp: currentTime,
+      trigger: Date.now(),
+    });
+  };
+
+  // 4. Scene Navigation Buttons
+  const jumpToScene = (index) => {
+    let accumulated = 0;
+    for (let i = 0; i < index; i++) {
+      accumulated += scenes[i].durationSecs || 10;
     }
+    setCurrentTime(accumulated + 0.1); // Jump to start of target scene
   };
 
-  const handleUserPan = () => {
-    // If user starts panning, hide overlay
-    if (showOverlay) setShowOverlay(false);
-  };
+  if (!activeScene)
+    return (
+      <Empty
+        description="No Script Data"
+        image={Empty.PRESENTED_IMAGE_SIMPLE}
+        style={{ marginTop: "20%" }}
+      />
+    );
+
+  // Calculate Local Time for the Rig (0 to Duration)
+  const localTime = Math.max(0, currentTime - activeSceneStart);
 
   return (
     <div
@@ -387,48 +451,46 @@ export const Visualizer = ({ provider }) => {
         overflow: "hidden",
       }}
     >
-      {/* 2D HTML Overlay (Always Visible) */}
-      <EmotionOverlay visible={showOverlay} />
+      <SectorOverlay visible={showOverlay} />
 
       <Canvas camera={{ position: [0, 0, 0], fov: 75 }}>
         <EffectComposer disableNormalPass>
           <Bloom
-            luminanceThreshold={0.2}
+            luminanceThreshold={0.1}
             mipmapBlur
-            intensity={1.2}
-            radius={0.5}
+            intensity={1.5}
+            radius={0.6}
           />
         </EffectComposer>
-        <fog attach="fog" args={["#050505", 5, 40]} />
-        <ambientLight intensity={0.1} />
+        <fog attach="fog" args={["#050505", 10, 60]} />
+        <ambientLight intensity={0.2} />
 
-        <Tunnel length={sceneLength} />
+        <TunnelMesh length={sceneLength + 100} />
 
         <Rig
-          length={sceneLength}
-          onEndReached={setAtEndOfScene}
-          cameraZ={cameraZ}
-          onPan={handleUserPan}
-          resetTrigger={resetStack}
+          localTime={localTime}
+          onScrollDelta={handleScrollDelta}
+          onScrollPos={handleScrollPos}
+          onPan={() => setShowOverlay(false)}
         />
 
         <group>
-          {sceneStrands.map((char) => (
+          {strands.map((char) => (
             <CharacterStrand
               key={`${char.id}-${sceneIndex}`}
               char={char}
-              length={sceneLength}
-              cameraZ={cameraZ}
-              onHover={(isActive, d, x, y) =>
-                setTooltip({ visible: isActive, data: d, x, y })
+              length={sceneLength + 50}
+              cameraZ={cameraZRef}
+              onHover={(visible, data, x, y) =>
+                setTooltip(visible ? { data, x, y } : null)
               }
-              onClick={() => {}}
+              onClick={onStrandClick}
             />
           ))}
         </group>
       </Canvas>
 
-      {/* --- HUD --- */}
+      {/* HUD: Scene Info */}
       <div
         style={{
           position: "absolute",
@@ -438,52 +500,42 @@ export const Visualizer = ({ provider }) => {
           pointerEvents: "none",
         }}
       >
-        <Space direction="vertical">
-          <Text style={{ color: "white", fontSize: 18, fontWeight: "bold" }}>
-            {activeScene ? activeScene.name : "Loading..."}
+        <Space direction="vertical" size={0}>
+          <Text
+            style={{
+              color: "white",
+              fontSize: 20,
+              fontWeight: "bold",
+              textShadow: "0 2px 4px black",
+            }}
+          >
+            {activeScene.name}
           </Text>
           <Space>
-            <Tag color="blue">
-              {sceneIndex + 1} / {scenes.length} Scenes
+            <Tag color="blue" bordered={false}>
+              Scene {sceneIndex + 1} / {scenes.length}
             </Tag>
-            {activeScene && (
-              <Tag color="purple">
-                {activeScene.characters.length} Characters
-              </Tag>
-            )}
+            <Tag color="orange" bordered={false}>
+              {localTime.toFixed(1)}s /{" "}
+              {(activeScene.durationSecs || 0).toFixed(1)}s
+            </Tag>
           </Space>
         </Space>
       </div>
 
-      {/* Bottom Right Controls */}
+      {/* HUD: Toggles */}
       <div style={{ position: "absolute", bottom: 20, right: 20, zIndex: 10 }}>
-        <Space>
-          <Button
-            shape="circle"
-            icon={<ReloadOutlined />}
-            onClick={() => setSceneIndex(0)}
-            style={{
-              color: "white",
-              background: "rgba(255,255,255,0.1)",
-              border: "1px solid rgba(255,255,255,0.2)",
-            }}
-          />
-          <Button
-            type="text"
-            icon={showOverlay ? <EyeOutlined /> : <EyeInvisibleOutlined />}
-            onClick={handleToggleOverlay}
-            style={{
-              color: "white",
-              background: "rgba(255,255,255,0.1)",
-              border: "1px solid rgba(255,255,255,0.2)",
-            }}
-          >
-            {showOverlay ? "Hide Sectors" : "Show Sectors"}
-          </Button>
-        </Space>
+        <Button
+          ghost
+          icon={showOverlay ? <EyeOutlined /> : <EyeInvisibleOutlined />}
+          onClick={() => setShowOverlay(!showOverlay)}
+        >
+          {showOverlay ? "Hide Sectors" : "Show Sectors"}
+        </Button>
       </div>
 
-      {tooltip.visible && tooltip.data && (
+      {/* HUD: Tooltip */}
+      {tooltip && (
         <div
           style={{
             position: "absolute",
@@ -497,10 +549,9 @@ export const Visualizer = ({ provider }) => {
           <Card
             size="small"
             style={{
-              width: 220,
-              background: "rgba(10,10,10,0.8)",
-              borderColor: "#444",
-              backdropFilter: "blur(10px)",
+              width: 200,
+              background: "rgba(0,0,0,0.85)",
+              border: `1px solid ${tooltip.data.color}`,
             }}
             bordered={false}
           >
@@ -508,47 +559,33 @@ export const Visualizer = ({ provider }) => {
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 10,
+                gap: 8,
                 marginBottom: 8,
               }}
             >
               <div
                 style={{
-                  width: 24,
-                  height: 24,
+                  width: 12,
+                  height: 12,
                   borderRadius: "50%",
-                  background:
-                    SECTOR_CONFIG[tooltip.data.emotion]?.color || "#fff",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: "bold",
-                  color: "#000",
-                  fontSize: 10,
+                  background: tooltip.data.color,
                 }}
-              >
-                {tooltip.data.name.substring(0, 1)}
-              </div>
-              <div>
-                <Text
-                  strong
-                  style={{ color: "#fff", display: "block", lineHeight: 1 }}
-                >
-                  {tooltip.data.name}
-                </Text>
-              </div>
+              />
+              <Text strong style={{ color: "white" }}>
+                {tooltip.data.name}
+              </Text>
             </div>
-            <Tag
-              color={SECTOR_CONFIG[tooltip.data.emotion]?.color}
-              style={{ color: "#000" }}
-            >
-              {(tooltip.data.emotion || "neutral").toUpperCase()}
+            <Tag color={tooltip.data.color} style={{ margin: 0 }}>
+              {tooltip.data.emotion.toUpperCase()}
             </Tag>
+            <div style={{ color: "#aaa", fontSize: 10, marginTop: 6 }}>
+              <AimOutlined /> Click to locate
+            </div>
           </Card>
         </div>
       )}
 
-      {/* End Prompt - Scroll Passthrough */}
+      {/* HUD: Navigation Markers (End of Scene) */}
       <div
         style={{
           position: "absolute",
@@ -556,54 +593,37 @@ export const Visualizer = ({ provider }) => {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: atEndOfScene ? "rgba(0,0,0,0.8)" : "transparent",
-          pointerEvents: "none", // Allows scrolling through overlay
-          opacity: atEndOfScene ? 1 : 0,
-          transition: "opacity 0.5s",
+          pointerEvents: "none",
+          opacity: atSceneEnd ? 1 : 0,
+          transition: "opacity 0.3s ease",
+          background:
+            "linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 30%)",
           zIndex: 15,
         }}
       >
         <div
           style={{
-            textAlign: "center",
-            pointerEvents: atEndOfScene ? "auto" : "none",
+            pointerEvents: "auto",
+            display: "flex",
+            gap: 16,
+            marginTop: "20%",
           }}
         >
-          <Result
-            status="success"
-            icon={<InfoCircleOutlined style={{ color: "#fff" }} />}
-            title={<span style={{ color: "#fff" }}>Scene Complete</span>}
-            subTitle={
-              <span style={{ color: "#aaa" }}>
-                Scroll up to review or continue.
-              </span>
-            }
-            extra={[
-              <Button
-                key="prev"
-                icon={<ArrowLeftOutlined />}
-                onClick={() => {
-                  setSceneIndex((s) => Math.max(0, s - 1));
-                  setAtEndOfScene(false);
-                }}
-                disabled={sceneIndex === 0}
-              >
-                Previous
-              </Button>,
-              <Button
-                key="next"
-                type="primary"
-                icon={<ArrowRightOutlined />}
-                onClick={() => {
-                  setSceneIndex((s) => Math.min(scenes.length - 1, s + 1));
-                  setAtEndOfScene(false);
-                }}
-                disabled={sceneIndex === scenes.length - 1}
-              >
-                Next Scene
-              </Button>,
-            ]}
-          />
+          <Button
+            icon={<ArrowLeftOutlined />}
+            onClick={() => jumpToScene(sceneIndex - 1)}
+            disabled={sceneIndex === 0}
+          >
+            Prev Scene
+          </Button>
+          <Button
+            type="primary"
+            icon={<ArrowRightOutlined />}
+            onClick={() => jumpToScene(sceneIndex + 1)}
+            disabled={sceneIndex >= scenes.length - 1}
+          >
+            Next Scene
+          </Button>
         </div>
       </div>
     </div>

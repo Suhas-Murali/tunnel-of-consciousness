@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useContext } from "react";
 import {
   theme,
   Card,
@@ -17,7 +17,9 @@ import {
   TeamOutlined,
   ThunderboltOutlined,
   FlagOutlined,
+  CaretDownOutlined,
 } from "@ant-design/icons";
+import { ScriptStateContext } from "../contexts";
 
 const { Text } = Typography;
 
@@ -36,6 +38,7 @@ const formatTime = (seconds) => {
 // ==========================================
 
 export const StoryOverview = ({ provider }) => {
+  const { currentTime, onSeek } = useContext(ScriptStateContext);
   const { token } = theme.useToken();
   const [scenes, setScenes] = useState([]);
   const [characters, setCharacters] = useState([]);
@@ -46,7 +49,17 @@ export const StoryOverview = ({ provider }) => {
     const map = provider.document.getMap("script_analysis");
 
     const updateHandler = () => {
-      setScenes(map.get("scenes") || []);
+      // Calculate absolute start times for seeking
+      const rawScenes = map.get("scenes") || [];
+      let accumulated = 0;
+      const processedScenes = rawScenes.map((s) => {
+        const start = accumulated;
+        const duration = s.durationSecs || 10;
+        accumulated += duration;
+        return { ...s, startTime: start, endTime: start + duration };
+      });
+
+      setScenes(processedScenes);
       setCharacters(map.get("characters") || []);
     };
 
@@ -56,15 +69,48 @@ export const StoryOverview = ({ provider }) => {
   }, [provider]);
 
   // Derived Metrics
-  const totalDurationSecs = scenes.reduce(
-    (acc, s) => acc + (s.durationSecs || 0),
-    0
+  const totalDurationSecs = Math.max(
+    1,
+    scenes.reduce((acc, s) => acc + (s.durationSecs || 0), 0)
   );
   const totalFormatted = formatTime(totalDurationSecs);
   const totalLocations = new Set(scenes.map((s) => s.name.split(" - ")[0]))
-    .size; // Rough heuristic
+    .size;
+
+  // Calculate percentage for the global playhead
+  const currentProgress = (currentTime / totalDurationSecs) * 100;
 
   // --- 2. RENDERERS ---
+
+  // Common "You Are Here" Line for graphs
+  const PlayheadOverlay = () => (
+    <div
+      style={{
+        position: "absolute",
+        left: `${currentProgress}%`,
+        top: 0,
+        bottom: 0,
+        width: 2,
+        background: token.colorError, // Red line for visibility
+        zIndex: 10,
+        pointerEvents: "none",
+        transition: "left 0.1s linear",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: -6,
+          left: "50%",
+          transform: "translateX(-50%)",
+          color: token.colorError,
+          fontSize: 10,
+        }}
+      >
+        <CaretDownOutlined />
+      </div>
+    </div>
+  );
 
   // A. PACING GRAPH
   const PacingGraph = () => {
@@ -73,11 +119,10 @@ export const StoryOverview = ({ provider }) => {
     const height = 60;
     const step = 100 / (scenes.length - 1 || 1);
 
-    // Build points: "x,y"
     const points = scenes
       .map((s, i) => {
         const x = i * step;
-        const val = s.metrics?.pacing || 50; // Use real pacing or default
+        const val = s.metrics?.pacing || 50;
         const y = height - (val / 100) * height;
         return `${x},${y}`;
       })
@@ -90,6 +135,7 @@ export const StoryOverview = ({ provider }) => {
           height: height,
           position: "relative",
           marginBottom: 10,
+          borderBottom: `1px solid ${token.colorBorderSecondary}`,
         }}
       >
         <svg
@@ -126,28 +172,6 @@ export const StoryOverview = ({ provider }) => {
             vectorEffect="non-scaling-stroke"
           />
         </svg>
-        <div
-          style={{
-            position: "absolute",
-            bottom: -20,
-            left: 0,
-            fontSize: 10,
-            color: token.colorTextSecondary,
-          }}
-        >
-          Start
-        </div>
-        <div
-          style={{
-            position: "absolute",
-            bottom: -20,
-            right: 0,
-            fontSize: 10,
-            color: token.colorTextSecondary,
-          }}
-        >
-          End
-        </div>
       </div>
     );
   };
@@ -162,25 +186,34 @@ export const StoryOverview = ({ provider }) => {
           height: 30,
           borderRadius: 4,
           overflow: "hidden",
+          position: "relative", // Needed for playhead
         }}
       >
         {scenes.map((scene) => {
-          // Calculate flex share based on duration
           const flexShare = scene.durationSecs || 10;
           return (
             <Tooltip
               key={scene.id}
-              title={`${scene.name} (${scene.type}) - ${scene.duration}`}
+              title={
+                <div>
+                  <strong>{scene.name}</strong>
+                  <div style={{ fontSize: 10 }}>Click to jump</div>
+                </div>
+              }
             >
               <div
+                onClick={() => onSeek && onSeek(scene.startTime)}
                 style={{
                   flex: flexShare,
-                  background: scene.color,
+                  background: scene.color || "#ccc",
                   borderRight: `1px solid ${token.colorBgContainer}`,
                   opacity: 0.8,
                   cursor: "pointer",
                   position: "relative",
+                  transition: "opacity 0.2s",
                 }}
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = 1)}
+                onMouseLeave={(e) => (e.currentTarget.style.opacity = 0.8)}
               >
                 {scene.metrics?.structuralBeat && (
                   <div
@@ -214,7 +247,7 @@ export const StoryOverview = ({ provider }) => {
   // C. CHARACTER THREADS
   const CharacterThreads = () => {
     return (
-      <div style={{ marginTop: 10 }}>
+      <div style={{ marginTop: 10, position: "relative" }}>
         {characters.map((char) => (
           <div
             key={char.id}
@@ -246,12 +279,10 @@ export const StoryOverview = ({ provider }) => {
               }}
             >
               {scenes.map((scene) => {
-                // ensure we have an array to check against
                 const charList = Array.isArray(scene.characters)
                   ? scene.characters
                   : Array.from(scene.characters || []);
 
-                // Check against Name OR ID to be safe
                 const isPresent =
                   charList.includes(char.name) || charList.includes(char.id);
 
@@ -330,12 +361,21 @@ export const StoryOverview = ({ provider }) => {
         style={{ marginBottom: 24, background: token.colorFillQuaternary }}
         variant="borderless"
       >
-        <Text
-          type="secondary"
-          style={{ fontSize: 12, marginBottom: 8, display: "block" }}
+        <div
+          style={{
+            marginBottom: 8,
+            display: "flex",
+            justifyContent: "space-between",
+          }}
         >
-          Visualizes scene sequence proportionally by duration.
-        </Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            Click blocks to jump
+          </Text>
+          <Text style={{ fontSize: 12, color: token.colorError }}>
+            Current Time: {formatTime(currentTime)}
+          </Text>
+        </div>
+
         <NarrativeGantt />
         <div
           style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}

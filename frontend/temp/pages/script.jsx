@@ -1,4 +1,10 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 import {
   Button,
@@ -15,8 +21,6 @@ import {
 import {
   AppstoreAddOutlined,
   SettingOutlined,
-  BorderRightOutlined,
-  BorderBottomOutlined,
   PlusSquareOutlined,
   CloseOutlined,
   EditOutlined,
@@ -28,15 +32,14 @@ import {
   CodeSandboxOutlined,
 } from "@ant-design/icons";
 
-// YJS Imports
 import * as Y from "yjs";
 import { HocuspocusProvider } from "@hocuspocus/provider";
-
 import DockLayout from "rc-dock";
 import "rc-dock/dist/rc-dock.css";
 
-import { GetDashboardButton, HeaderPropsCommon } from "../components/bars";
+import { HeaderPropsCommon, GetDashboardButton } from "../components/bars";
 import { ScriptSettings } from "../components/settings";
+// IMPORTS
 import {
   EditorWindow,
   SceneOverview,
@@ -47,60 +50,49 @@ import {
 } from "../components/editor";
 import { CenteredLoader } from "../components/loader";
 import { deleteScript, getScriptById } from "../../api";
+import { ScriptStateContext } from "../components/contexts";
 
 const { Text } = Typography;
 
-// ==========================================
-// 1. PANEL REGISTRY
-// ==========================================
 const PANEL_REGISTRY = {
   editor: {
     id: "editor",
     label: "Script Editor",
     icon: <EditOutlined />,
     component: EditorWindow,
-    defaultGroup: "editor-group",
   },
   visualizer: {
     id: "visualizer",
     label: "3D Visualizer",
     icon: <FundProjectionScreenOutlined />,
     component: Visualizer,
-    defaultGroup: "visualizer-group",
   },
   timeline: {
     id: "timeline",
     label: "Timeline",
     icon: <FieldTimeOutlined />,
     component: Timeline,
-    defaultGroup: "timeline-group",
   },
   char_overview: {
     id: "char_overview",
     label: "Character Overview",
     icon: <TeamOutlined />,
     component: CharacterOverview,
-    defaultGroup: "editor-group",
   },
   scene_overview: {
     id: "scene_overview",
     label: "Scene Overview",
     icon: <VideoCameraOutlined />,
     component: SceneOverview,
-    defaultGroup: "visualizer-group",
   },
   story_overview: {
     id: "story_overview",
     label: "Story Overview",
     icon: <ProjectOutlined />,
     component: StoryOverview,
-    defaultGroup: "dashboard-group",
   },
 };
 
-// ==========================================
-// 2. CSS STYLES
-// ==========================================
 const getDockThemeStyles = (token) => `
   .dock-layout { background: ${token.colorBgLayout} !important; }
   .dock-panel { background: ${token.colorBgContainer}; border: 1px solid ${token.colorBorderSecondary}; }
@@ -116,20 +108,50 @@ const getDockThemeStyles = (token) => `
   .dock-dropdown-menu { background: ${token.colorBgElevated}; border: 1px solid ${token.colorBorderSecondary}; }
 `;
 
-// ==========================================
-// MAIN SCRIPT PAGE
-// ==========================================
+// Wrapper to handle Active Panel clicking without re-rendering everything
+const PanelWrapper = ({ id, children }) => {
+  const { activePanelId, setActivePanelId } =
+    React.useContext(ScriptStateContext);
+  const { token } = theme.useToken();
+  return (
+    <div
+      onClickCapture={() => setActivePanelId(id)}
+      style={{
+        height: "100%",
+        width: "100%",
+        display: "flex",
+        flexDirection: "column",
+        boxShadow:
+          activePanelId === id
+            ? `inset 0 0 0 2px ${token.colorPrimary}`
+            : "none",
+        transition: "box-shadow 0.2s ease",
+      }}
+    >
+      {children}
+    </div>
+  );
+};
+
 const ScriptPage = () => {
   const navigate = useNavigate();
+  const { token } = theme.useToken();
   const { name: scriptId } = useParams();
   const { user } = useOutletContext();
+
   const dockRef = useRef(null);
-  const { token } = theme.useToken();
   const [script, setScript] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // State to track the currently selected panel
+  // Global State
+  const [currentTime, setCurrentTime] = useState(0);
+  const [focusRequest, setFocusRequest] = useState(null);
   const [activePanelId, setActivePanelId] = useState(null);
+
+  // Yjs
+  const [provider, setProvider] = useState(null);
+  const [isSynced, setIsSynced] = useState(false);
 
   const loadScriptData = async () => {
     try {
@@ -143,33 +165,19 @@ const ScriptPage = () => {
     }
   };
 
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
-  // YJS State
-  const [provider, setProvider] = useState(null);
-  const [isSynced, setIsSynced] = useState(false);
-
   const getStorageKey = (id) => `tunnel_layout_${id}`;
 
-  // 1. Initialize YJS Provider on Mount
   useEffect(() => {
     setProvider(null);
     setIsSynced(false);
-
     const ydoc = new Y.Doc();
     const newProvider = new HocuspocusProvider({
-      url: "ws://localhost:5050",
+      url: import.meta.env.VITE_HOCUSPOCUS_URL || "ws://localhost:5050",
       name: scriptId || "default-script",
       document: ydoc,
     });
-
-    newProvider.on("synced", () => {
-      console.log("YJS Synced successfully");
-      setIsSynced(true);
-    });
-
+    newProvider.on("synced", () => setIsSynced(true));
     setProvider(newProvider);
-
     return () => {
       newProvider.destroy();
       ydoc.destroy();
@@ -177,17 +185,10 @@ const ScriptPage = () => {
   }, [scriptId]);
 
   const handleScriptDeleted = async () => {
-    try {
-      await deleteScript(scriptId);
-      localStorage.removeItem(getStorageKey(scriptId));
-      message.success("Script deleted.");
-      navigate("/dashboard");
-    } catch (err) {
-      message.error("Failed to delete script.");
-    }
+    await deleteScript(scriptId);
+    localStorage.removeItem(getStorageKey(scriptId));
+    navigate("/dashboard");
   };
-
-  // --- TAB & PANEL CREATION HELPERS ---
 
   const createTabTitle = useCallback(
     (title, id) => (
@@ -195,16 +196,7 @@ const ScriptPage = () => {
         <Text strong={true}>{title}</Text>
         <CloseOutlined
           className="dock-custom-close-btn"
-          style={{
-            fontSize: 12,
-            color: token.colorTextTertiary,
-            cursor: "pointer",
-            marginLeft: 8,
-            padding: "4px",
-            borderRadius: "4px",
-          }}
-          onMouseEnter={(e) => (e.target.style.color = token.colorError)}
-          onMouseLeave={(e) => (e.target.style.color = token.colorTextTertiary)}
+          style={{ fontSize: 12, marginLeft: 8, cursor: "pointer" }}
           onClick={(e) => {
             e.stopPropagation();
             if (dockRef.current)
@@ -214,27 +206,17 @@ const ScriptPage = () => {
                 "remove"
               );
           }}
-          onMouseDown={(e) => e.stopPropagation()}
         />
       </div>
     ),
-    [token]
+    []
   );
 
   const createPanel = useCallback(
     (type, existingId = null) => {
       const registryItem = PANEL_REGISTRY[type];
-
-      if (!registryItem) {
-        console.warn(`Unknown panel type: ${type}`);
-        return {
-          id: existingId || `unknown-${Date.now()}`,
-          title: "Unknown Panel",
-          content: <Empty description="Panel type not found" />,
-          closable: true,
-          group: "locked",
-        };
-      }
+      if (!registryItem)
+        return { id: Date.now(), title: "Unknown", content: <Empty /> };
 
       const id = existingId || `${type}-${Date.now()}`;
       const Component = registryItem.component;
@@ -242,79 +224,56 @@ const ScriptPage = () => {
       return {
         id: id,
         title: createTabTitle(registryItem.label, id),
-        // Wrap the component in a div that handles activation and visual feedback
         content: (
-          <div
-            onClickCapture={() => setActivePanelId(id)}
-            style={{
-              height: "100%",
-              width: "100%",
-              display: "flex",
-              flexDirection: "column",
-              // Visual indicator for active panel
-              boxShadow:
-                activePanelId === id
-                  ? `inset 0 0 0 2px ${token.colorPrimary}`
-                  : "none",
-              transition: "box-shadow 0.2s ease",
-            }}
-          >
+          // PanelWrapper is key: It (and Component inside) consumes Context.
+          // We do NOT pass dynamic props here.
+          <PanelWrapper id={id}>
             <Component
-              provider={provider}
-              scriptId={scriptId}
-              token={token}
               user={user}
-              documentName={scriptId}
+              script={script}
+              provider={provider}
+              token={token}
             />
-          </div>
+          </PanelWrapper>
         ),
         closable: false,
         group: "locked",
       };
     },
-    [scriptId, token, createTabTitle, provider, user, activePanelId]
+    [scriptId, token, provider, user]
   );
 
-  // --- LAYOUT STORAGE & HYDRATION ---
-
-  const getInitialLayout = () => {
-    return {
-      dockbox: {
-        mode: "vertical",
-        children: [
-          // Top Row
-          {
-            mode: "horizontal",
-            size: 800,
-            children: [
-              {
-                id: "visualizer-group",
-                group: "locked",
-                tabs: [
-                  createPanel("visualizer"),
-                  createPanel("scene_overview"),
-                ],
-                size: 650,
-              },
-              {
-                id: "editor-group",
-                group: "locked",
-                tabs: [createPanel("editor"), createPanel("char_overview")],
-                size: 800,
-              },
-            ],
-          },
-          // Bottom Row
-          {
-            id: "timeline-group",
-            group: "locked",
-            tabs: [createPanel("timeline")],
-            size: 150,
-          },
-        ],
-      },
-    };
-  };
+  const getInitialLayout = () => ({
+    dockbox: {
+      mode: "vertical",
+      children: [
+        {
+          mode: "horizontal",
+          size: 800,
+          children: [
+            {
+              id: "visualizer-group",
+              group: "locked",
+              tabs: [createPanel("visualizer")],
+              size: 600,
+            },
+            {
+              id: "editor-group",
+              group: "locked",
+              tabs: [createPanel("editor"), createPanel("char_overview")],
+              size: 800,
+            },
+          ],
+        },
+        {
+          id: "timeline-group",
+          group: "locked",
+          tabs: [createPanel("timeline")],
+          size: 150,
+        },
+      ],
+    },
+  });
 
   const hydrateLayout = useCallback(
     (layout) => {
@@ -324,7 +283,6 @@ const ScriptPage = () => {
           box.tabs.forEach((tab) => {
             const type = tab.id.split("-")[0];
             const hydratedPanel = createPanel(type, tab.id);
-
             tab.title = hydratedPanel.title;
             tab.content = hydratedPanel.content;
             tab.closable = false;
@@ -343,143 +301,63 @@ const ScriptPage = () => {
     const saved = localStorage.getItem(key);
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        return hydrateLayout(parsed);
+        return hydrateLayout(JSON.parse(saved));
       } catch (e) {
-        console.error("Failed to parse saved layout:", e);
+        console.error(e);
       }
     }
     return getInitialLayout();
   }, [scriptId, hydrateLayout]);
 
   const [layoutConfig, setLayoutConfig] = useState(null);
-  const [dockKey, setDockKey] = useState(0);
 
   useEffect(() => {
     if (isSynced && provider) {
       const layout = loadLayout();
       setLayoutConfig(layout);
-      setDockKey((prev) => prev + 1);
       loadScriptData();
     }
   }, [scriptId, loadLayout, isSynced, provider]);
 
-  // Force layout update when activePanelId changes to ensure visual feedback renders
-  useEffect(() => {
-    if (dockRef.current && layoutConfig) {
-      // Re-hydrate the current layout state to update the `content` prop with the new active style
-      const currentLayout = dockRef.current.saveLayout();
-      const hydrated = hydrateLayout(currentLayout);
-      dockRef.current.loadLayout(hydrated);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePanelId]);
-
   const handleLayoutChange = (newLayout) => {
-    const key = getStorageKey(scriptId);
     const cleanJSON = JSON.stringify(newLayout, (k, v) => {
       if (k === "content" || k === "title" || k === "parent") return undefined;
       return v;
     });
-    localStorage.setItem(key, cleanJSON);
+    localStorage.setItem(getStorageKey(scriptId), cleanJSON);
   };
 
-  const addWindow = (type, direction = "middle") => {
-    const dock = dockRef.current;
-    if (!dock) return;
-
+  const addWindow = (type) => {
+    if (!dockRef.current) return;
     const newPanel = createPanel(type);
-
-    // Logic: Try to add to the active panel if it exists
-    if (activePanelId) {
-      // We need to verify the panel still exists in the dock
-      const targetPanel = dock.find(activePanelId);
-      if (targetPanel) {
-        dock.dockMove(newPanel, activePanelId, direction);
-        return;
-      }
-    }
-
-    // Fallback: Default logic if no active panel or active panel lost
-    const layout = dock.saveLayout ? dock.saveLayout() : dock.layout;
-
-    const hasAnyTabs = (node) => {
-      if (!node) return false;
-      if (node.tabs && node.tabs.length > 0) return true;
-      if (node.children && node.children.length > 0) {
-        return node.children.some((child) => hasAnyTabs(child));
-      }
-      return false;
-    };
-
-    const isDockEmpty =
-      !layout || !layout.dockbox || !hasAnyTabs(layout.dockbox);
-
-    if (isDockEmpty) {
-      const freshLayout = {
-        dockbox: {
-          mode: "horizontal",
-          children: [
-            { id: `group-${Date.now()}`, group: "locked", tabs: [newPanel] },
-          ],
-        },
-      };
-      setLayoutConfig(freshLayout);
-      setDockKey((prev) => prev + 1);
-      handleLayoutChange(freshLayout);
-      return;
-    }
-
-    const findFirstGroup = (node) => {
-      if (!node) return null;
-      if (node.tabs) return node;
-      if (node.children) {
-        for (const child of node.children) {
-          const found = findFirstGroup(child);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-
-    const targetGroup = findFirstGroup(layout.dockbox);
-    if (targetGroup) {
-      dock.dockMove(newPanel, targetGroup.id, direction);
-    } else {
-      dock.dockMove(newPanel, null, "float");
-    }
+    dockRef.current.dockMove(newPanel, activePanelId || null, "middle");
   };
 
-  const menuItems = useMemo(() => {
-    return Object.entries(PANEL_REGISTRY).map(([key, config]) => ({
-      key: `grp-${key}`,
-      type: "group",
-      label: config.label,
-      children: [
-        {
-          key: `${key}-tab`,
-          label: "Add as Tab",
-          icon: <PlusSquareOutlined />,
-          onClick: () => addWindow(key, "middle"),
-        },
-        {
-          key: `${key}-split-right`,
-          label: "Split Right",
-          icon: <BorderRightOutlined />,
-          onClick: () => addWindow(key, "right"),
-        },
-        {
-          key: `${key}-split-down`,
-          label: "Split Down",
-          icon: <BorderBottomOutlined />,
-          onClick: () => addWindow(key, "bottom"),
-        },
-      ],
-    }));
-  }, [addWindow]);
+  const menuItems = useMemo(
+    () =>
+      Object.entries(PANEL_REGISTRY).map(([key, config]) => ({
+        key: `${key}-tab`,
+        label: config.label,
+        icon: <PlusSquareOutlined />,
+        onClick: () => addWindow(key),
+      })),
+    [addWindow]
+  );
 
-  if (!isSynced || !provider) {
-    return (
+  if (!isSynced || !provider) return <CenteredLoader height="100vh" />;
+  if (loading && !script) return <CenteredLoader />;
+
+  return (
+    <ScriptStateContext.Provider
+      value={{
+        currentTime,
+        setCurrentTime,
+        focusRequest,
+        setFocusRequest,
+        activePanelId,
+        setActivePanelId,
+      }}
+    >
       <div
         style={{
           height: "100vh",
@@ -488,140 +366,97 @@ const ScriptPage = () => {
           background: token.colorBgLayout,
         }}
       >
-        <CenteredLoader height="100vh" message="Connecting to Tunnel..." />
-      </div>
-    );
-  }
+        <style>{getDockThemeStyles(token)}</style>
 
-  if (loading && !script) return <CenteredLoader />;
-
-  return (
-    <div
-      style={{
-        height: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        background: token.colorBgLayout,
-      }}
-    >
-      <style>{getDockThemeStyles(token)}</style>
-
-      {/* TOOLBAR */}
-      <div
-        style={{
-          padding: "8px 16px",
-          background: token.colorBgContainer,
-          borderBottom: `1px solid ${token.colorBorderSecondary}`,
-          display: "grid",
-          gridTemplateColumns: "1fr auto 1fr",
-          alignItems: "center",
-        }}
-      >
-        {/* LEFT: Nav Button */}
         <div
           style={{
-            display: "flex",
-            justifyContent: "flex-start",
+            padding: "8px 16px",
+            background: token.colorBgContainer,
+            borderBottom: `1px solid ${token.colorBorderSecondary}`,
+            display: "grid",
+            gridTemplateColumns: "1fr auto 1fr",
             alignItems: "center",
           }}
         >
-          <Button
-            type="text"
-            icon={<CodeSandboxOutlined style={{ fontSize: 20 }} />}
-            onClick={() => navigate(`/script`)}
-          />
-          <Text style={{ marginLeft: "12px" }}>{script?.name}</Text>
-        </div>
-
-        {/* CENTER: Search Bar */}
-        <div style={{ display: "flex", justifyContent: "center" }}>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <Button
+              type="text"
+              icon={<CodeSandboxOutlined style={{ fontSize: 20 }} />}
+              onClick={() => navigate(`/script`)}
+            />
+            <Text style={{ marginLeft: "12px" }}>{script?.name}</Text>
+          </div>
           <Input.Search
-            placeholder="Search script content, characters, or scenes..."
+            placeholder="Search..."
             allowClear
             style={{ width: 450 }}
           />
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <Space>
+              <Dropdown menu={{ items: menuItems }} trigger={["click"]}>
+                <Button icon={<AppstoreAddOutlined />}>Add Window</Button>
+              </Dropdown>
+              <Tooltip title="Script Settings">
+                <Button
+                  type="text"
+                  icon={
+                    <SettingOutlined
+                      style={{ fontSize: 18, color: token.colorTextSecondary }}
+                    />
+                  }
+                  onClick={() => setIsSettingsOpen(true)}
+                />
+              </Tooltip>
+            </Space>
+          </div>
         </div>
 
-        {/* RIGHT: Tools & Settings */}
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <Space>
-            <Dropdown
-              menu={{ items: menuItems }}
-              trigger={["click"]}
-              placement="bottomRight"
-              styles={{ root: { maxHeight: "400px", overflowY: "auto" } }}
-            >
-              <Button icon={<AppstoreAddOutlined />}>Add Window</Button>
-            </Dropdown>
-            <Tooltip title="Script Settings">
-              <Button
-                type="text"
-                icon={
-                  <SettingOutlined
-                    style={{ fontSize: 18, color: token.colorTextSecondary }}
-                  />
-                }
-                onClick={() => setIsSettingsOpen(true)}
-              />
-            </Tooltip>
-          </Space>
+        <div style={{ flex: 1, position: "relative" }}>
+          {layoutConfig && (
+            <DockLayout
+              ref={dockRef}
+              defaultLayout={layoutConfig}
+              onLayoutChange={handleLayoutChange}
+              style={{ position: "absolute", inset: 0 }}
+              groups={{
+                locked: {
+                  floatable: false,
+                  maximizable: false,
+                  closable: false,
+                },
+              }}
+            />
+          )}
         </div>
+
+        <Modal
+          title="Script Settings"
+          open={isSettingsOpen}
+          onCancel={() => setIsSettingsOpen(false)}
+          footer={null}
+          width={800}
+          destroyOnHidden
+        >
+          <div style={{ padding: 24 }}>
+            <ScriptSettings
+              script={script}
+              currentUser={user}
+              onDelete={handleScriptDeleted}
+              loadScriptData={loadScriptData}
+            />
+          </div>
+        </Modal>
       </div>
-
-      {/* DOCKING AREA */}
-      <div style={{ flex: 1, position: "relative" }}>
-        {layoutConfig && (
-          <DockLayout
-            key={`${scriptId}-${dockKey}`}
-            ref={dockRef}
-            defaultLayout={layoutConfig}
-            onLayoutChange={handleLayoutChange}
-            style={{
-              position: "absolute",
-              left: 0,
-              top: 0,
-              right: 0,
-              bottom: 0,
-            }}
-            groups={{
-              locked: { floatable: false, maximizable: false, closable: false },
-            }}
-          />
-        )}
-      </div>
-
-      <Modal
-        title="Script Settings"
-        open={isSettingsOpen}
-        onCancel={() => setIsSettingsOpen(false)}
-        footer={null}
-        width={800}
-        destroyOnHidden
-        styles={{ body: { padding: 0 } }}
-      >
-        <div style={{ padding: 24 }}>
-          <ScriptSettings
-            script={script}
-            currentUser={user}
-            onDelete={handleScriptDeleted}
-            loadScriptData={loadScriptData}
-          />
-        </div>
-      </Modal>
-    </div>
+    </ScriptStateContext.Provider>
   );
-};
-
-const GetHeaderProps = (context) => {
-  return {
-    ...HeaderPropsCommon,
-    rightItems: [GetDashboardButton(context)],
-    breadcrumbs: true,
-    hidden: true,
-  };
 };
 
 export const Script = {
   Page: ScriptPage,
-  GetHeaderProps,
+  GetHeaderProps: (c) => ({
+    ...HeaderPropsCommon,
+    rightItems: [GetDashboardButton(c)],
+    breadcrumbs: true,
+    hidden: true,
+  }),
 };

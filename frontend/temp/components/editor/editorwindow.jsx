@@ -1,8 +1,7 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Layout, Tabs, theme } from "antd";
 import { UserOutlined, AppstoreOutlined } from "@ant-design/icons";
 
-// Sub-components
 import { ScriptEditor } from "./scripteditor";
 import { CharacterOverview } from "./characteroverview";
 import { SceneOverview } from "./sceneoverview";
@@ -14,14 +13,12 @@ export const EditorWindow = ({ provider }) => {
   const { token } = theme.useToken();
   const [collapsed, setCollapsed] = useState(false);
 
-  // Wait for the YJS provider to be ready
   if (!provider) return <CenteredLoader height="100%" />;
 
   const toggleSider = () => setCollapsed(!collapsed);
 
   return (
     <Layout style={{ height: "100%" }}>
-      {/* Main Content Area: The Text Editor */}
       <Content
         style={{
           height: "100%",
@@ -35,14 +32,13 @@ export const EditorWindow = ({ provider }) => {
         />
       </Content>
 
-      {/* Right Sidebar: Analysis Tabs */}
       <Sider
         width={350}
         theme="light"
         collapsible
         collapsed={collapsed}
         collapsedWidth={0}
-        trigger={null} // We use the button inside ScriptEditor to toggle this
+        trigger={null}
         style={{ borderLeft: `1px solid ${token.colorBorder}` }}
       >
         <Tabs

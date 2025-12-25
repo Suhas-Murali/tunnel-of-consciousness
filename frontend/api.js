@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API = axios.create({
+const BackendAPI = axios.create({
   baseURL: import.meta.env.VITE_BACKEND_URL || "http://localhost:5050",
   withCredentials: true,
 });
@@ -8,20 +8,20 @@ const API = axios.create({
 // ==============================
 // AUTHENTICATION
 // ==============================
-export const getProfile = () => API.get("/user/profile");
+export const getProfile = () => BackendAPI.get("/user/profile");
 export const register = (username, password, email) =>
-  API.post("/user/register", { username, password, email });
-export const updateUser = (details) => API.post("/user/update", details);
+  BackendAPI.post("/user/register", { username, password, email });
+export const updateUser = (details) => BackendAPI.post("/user/update", details);
 export const login = (email, password) =>
-  API.post("/user/login", { email, password });
-export const logout = () => API.get("/user/logout");
+  BackendAPI.post("/user/login", { email, password });
+export const logout = () => BackendAPI.get("/user/logout");
 
 // ==============================
 // SCRIPT PARSING & GENERATION
 // ==============================
-export const parseScript = (script) => API.post("/script/parse", { script });
+export const parseScript = (script) => BackendAPI.post("/script/parse", { script });
 export const generateEmotionData = (name, script) =>
-  API.post("/script/v2/generate", { script: { name, ...script } });
+  BackendAPI.post("/script/v2/generate", { script: { name, ...script } });
 
 // ==============================
 // SCRIPT MANAGEMENT (NEW)
@@ -31,30 +31,30 @@ export const generateEmotionData = (name, script) =>
  * Creates a new empty script
  * @param {string} name - The name of the script
  */
-export const createScript = (name) => API.post("/script", { name });
+export const createScript = (name) => BackendAPI.post("/script", { name });
 
 /**
  * Gets a list of all scripts (Owned + Shared)
  * Returns { scripts: [ { id, title, permission, ownerName ... } ] }
  */
-export const allScripts = () => API.get("/script/all");
+export const allScripts = () => BackendAPI.get("/script/all");
 
 /**
  * Gets a single script by ID (Includes role/permission info)
  * Use this for loading the editor
  */
-export const getScriptById = (id) => API.get(`/script/${id}`);
+export const getScriptById = (id) => BackendAPI.get(`/script/${id}`);
 
 /**
  * Renames a script
  */
 export const renameScript = (id, newName) =>
-  API.patch(`/script/${id}`, { name: newName });
+  BackendAPI.patch(`/script/${id}`, { name: newName });
 
 /**
  * Deletes a script permanently
  */
-export const deleteScript = (id) => API.delete(`/script/${id}`);
+export const deleteScript = (id) => BackendAPI.delete(`/script/${id}`);
 
 // ==============================
 // ACCESS CONTROL & COLLABORATION
@@ -67,7 +67,7 @@ export const deleteScript = (id) => API.delete(`/script/${id}`);
  * @param {string} role - 'viewer' or 'editor'
  */
 export const shareScript = (id, email, role) =>
-  API.post(`/script/${id}/access`, { email, role });
+  BackendAPI.post(`/script/${id}/access`, { email, role });
 
 /**
  * Update an existing collaborator's permission
@@ -76,7 +76,7 @@ export const shareScript = (id, email, role) =>
  * @param {string} role - 'viewer' or 'editor'
  */
 export const updateScriptPermission = (id, userId, role) =>
-  API.patch(`/script/${id}/access/${userId}`, { role });
+  BackendAPI.patch(`/script/${id}/access/${userId}`, { role });
 
 /**
  * Remove a collaborator (or leave script if self)
@@ -84,7 +84,7 @@ export const updateScriptPermission = (id, userId, role) =>
  * @param {string} userId - The _id of the user to remove
  */
 export const removeCollaborator = (id, userId) =>
-  API.delete(`/script/${id}/access/${userId}`);
+  BackendAPI.delete(`/script/${id}/access/${userId}`);
 
 /**
  * Transfer ownership of the script to another user
@@ -92,12 +92,12 @@ export const removeCollaborator = (id, userId) =>
  * @param {string} newOwnerId - The _id of the new owner
  */
 export const transferOwnership = (id, newOwnerId) =>
-  API.post(`/script/${id}/transfer`, { newOwnerId });
+  BackendAPI.post(`/script/${id}/transfer`, { newOwnerId });
 
 
 
 // api.js
-const AI_API_URL = "http://localhost:8000";
+const AI_API_URL = import.meta.env.VITE_AI_ANALYSIS_URL || "http://localhost:8000";
 
 export const analyzeSceneAI = async (id, text) => {
   try {

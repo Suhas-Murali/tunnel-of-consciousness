@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useContext } from "react";
 import {
   theme,
   Select,
@@ -25,14 +25,17 @@ import {
   MessageOutlined,
   EnvironmentOutlined,
 } from "@ant-design/icons";
+import { ScriptStateContext } from "../contexts";
 
 const { Text, Title, Paragraph } = Typography;
 
 export const CharacterOverview = ({ provider }) => {
+  const { focusRequest } = useContext(ScriptStateContext);
   const { token } = theme.useToken();
   const [characters, setCharacters] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
 
+  // --- 1. Subscribe to YJS Data ---
   useEffect(() => {
     if (!provider) return;
     const map = provider.document.getMap("script_analysis");
@@ -41,6 +44,22 @@ export const CharacterOverview = ({ provider }) => {
     map.observe(updateHandler);
     return () => map.unobserve(updateHandler);
   }, [provider]);
+
+  // --- 2. Auto-Selection Logic ---
+
+  // Default to first character on load
+  useEffect(() => {
+    if (!selectedId && characters.length > 0) {
+      setSelectedId(characters[0].id);
+    }
+  }, [characters, selectedId]);
+
+  // Sync with 3D Visualizer clicks
+  useEffect(() => {
+    if (focusRequest?.characterId) {
+      setSelectedId(focusRequest.characterId);
+    }
+  }, [focusRequest]);
 
   const activeChar = useMemo(
     () => characters.find((c) => c.id === selectedId),
@@ -63,6 +82,7 @@ export const CharacterOverview = ({ provider }) => {
         background: token.colorBgContainer,
       }}
     >
+      {/* Header Selector */}
       <div
         style={{
           padding: "12px 16px",
@@ -94,15 +114,17 @@ export const CharacterOverview = ({ provider }) => {
         />
       </div>
 
+      {/* Content Area */}
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
         {!selectedId || !activeChar ? (
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="No Character Selected"
+            description="No Character Data"
             style={{ marginTop: 40 }}
           />
         ) : (
           <div>
+            {/* Header Info */}
             <div style={{ display: "flex", gap: 16, marginBottom: 24 }}>
               <Avatar
                 size={64}
@@ -131,6 +153,7 @@ export const CharacterOverview = ({ provider }) => {
               </div>
             </div>
 
+            {/* Metrics Cards */}
             {activeChar.metrics && (
               <div style={{ marginBottom: 24 }}>
                 <Row gutter={[16, 16]}>
@@ -265,6 +288,7 @@ export const CharacterOverview = ({ provider }) => {
               </div>
             )}
 
+            {/* Description */}
             <Divider orientation="left" style={{ fontSize: 13 }}>
               <Tag color="blue" icon={<UserOutlined />}>
                 Characteristics
@@ -274,6 +298,7 @@ export const CharacterOverview = ({ provider }) => {
               {activeChar.description}
             </Paragraph>
 
+            {/* Dialogue List */}
             <Divider orientation="left" style={{ fontSize: 13 }}>
               <MessageOutlined /> Dialogue
             </Divider>

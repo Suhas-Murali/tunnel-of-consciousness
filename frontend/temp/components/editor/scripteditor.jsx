@@ -1,26 +1,34 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useContext,
+} from "react";
 import { useOutletContext } from "react-router-dom";
 import {
   Button,
   Tag,
-  Typography,
   Divider,
   Space,
   theme,
-  Dropdown,
+  Switch,
+  Tooltip,
   Card,
+  Dropdown,
 } from "antd";
 import {
   BoldOutlined,
   ItalicOutlined,
   UndoOutlined,
   RedoOutlined,
-  HighlightOutlined,
   MenuFoldOutlined,
   SyncOutlined,
+  ThunderboltOutlined,
+  RobotOutlined,
+  HighlightOutlined,
 } from "@ant-design/icons";
 
-// Tiptap Imports
 import { StarterKit } from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCaret from "@tiptap/extension-collaboration-caret";
@@ -33,6 +41,9 @@ import {
 } from "@tiptap/react";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import TiptapParagraph from "@tiptap/extension-paragraph";
+
+// Import Context
+import { ScriptStateContext } from "../contexts";
 
 // ==========================================
 // 1. API HELPERS & UTILS
@@ -94,8 +105,26 @@ const pseudoRandom = (seed) => {
   return x - Math.floor(x);
 };
 
+const generateContentHash = (scenes, characters) => {
+  const scenesFingerprint = scenes
+    .map((s) => s.id + s.rawText.length)
+    .join("|");
+  const charsFingerprint = characters
+    .map((c) => c.name + c.dialogueCount)
+    .join("|");
+  const contentString = scenesFingerprint + "||" + charsFingerprint;
+
+  let hash = 0;
+  for (let i = 0; i < contentString.length; i++) {
+    const char = contentString.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash;
+  }
+  return hash;
+};
+
 // ==========================================
-// 2. LOCAL SCRIPT PARSER (SYNC LOGIC)
+// 2. LOCAL SCRIPT PARSER
 // ==========================================
 
 const analyzeScriptLocal = (doc) => {
@@ -110,6 +139,7 @@ const analyzeScriptLocal = (doc) => {
     id: "start",
     name: "OPENING",
     type: "Action",
+    color: "#888",
     lines: [],
     characters: new Set(),
     actionLines: 0,
@@ -135,10 +165,13 @@ const analyzeScriptLocal = (doc) => {
         interactions.push(currentScene.characters);
       }
       const isExt = text.toUpperCase().startsWith("EXT");
+      const sceneName = text || "UNTITLED SCENE";
+
       currentScene = {
         id: `scene-${scenes.length + 1}`,
-        name: text || "UNTITLED SCENE",
+        name: sceneName,
         type: isExt ? "Action" : "Dialogue",
+        color: stringToColor(sceneName),
         lines: [],
         characters: new Set(),
         actionLines: 0,
@@ -206,7 +239,6 @@ const analyzeScriptLocal = (doc) => {
   scenes.push(currentScene);
   interactions.push(currentScene.characters);
 
-  // --- POST-PROCESS SCENES ---
   const finalScenes = scenes.map((s, index) => {
     const totalLines = s.actionLines + s.dialogueLines;
     const pacing =
@@ -248,7 +280,6 @@ const analyzeScriptLocal = (doc) => {
     };
   });
 
-  // --- POST-PROCESS CHARACTERS ---
   const finalCharacters = Object.values(characters).map((c) => {
     const sceneMap = {};
     c.rawLines.forEach((line) => {
@@ -293,7 +324,7 @@ const analyzeScriptLocal = (doc) => {
 };
 
 // ==========================================
-// 3. STYLES & NODE VIEWS
+// 3. EDITOR STYLES & COMPONENTS
 // ==========================================
 
 const getEditorStyles = (token) => `
@@ -371,10 +402,6 @@ const ScreenplayBlock = ({ node, updateAttributes }) => {
     </NodeViewWrapper>
   );
 };
-
-// ==========================================
-// 4. EDITOR EXTENSION
-// ==========================================
 
 const PATTERNS = {
   SCENE: /^(INT|EXT|EST|I\/E|INT\/EXT)[\.\s]/i,
@@ -462,7 +489,15 @@ const ScreenplayExtension = TiptapParagraph.extend({
   },
 });
 
-const EditorToolbar = ({ editor, token, onSiderCollapse, isAnalysing }) => {
+const EditorToolbar = ({
+  editor,
+  token,
+  onSiderCollapse,
+  isAnalysing,
+  autoAnalyze,
+  onToggleAuto,
+  onTriggerAnalysis,
+}) => {
   if (!editor) return null;
   return (
     <div
@@ -497,9 +532,38 @@ const EditorToolbar = ({ editor, token, onSiderCollapse, isAnalysing }) => {
           icon={<RedoOutlined />}
           onClick={() => editor.chain().focus().redo().run()}
         />
+
+        <Divider orientation="vertical" />
+
+        <Tooltip title="Auto-analyze script on edit">
+          <Space>
+            <Switch
+              size="small"
+              checkedChildren={<RobotOutlined />}
+              unCheckedChildren={<RobotOutlined />}
+              checked={autoAnalyze}
+              onChange={onToggleAuto}
+            />
+            <span style={{ fontSize: 12, color: token.colorTextSecondary }}>
+              Auto-AI
+            </span>
+          </Space>
+        </Tooltip>
+
+        <Tooltip title="Run full analysis now">
+          <Button
+            size="small"
+            icon={<ThunderboltOutlined />}
+            onClick={onTriggerAnalysis}
+            disabled={isAnalysing}
+          >
+            Run
+          </Button>
+        </Tooltip>
+
         {isAnalysing && (
           <Tag color="blue" icon={<SyncOutlined spin />}>
-            AI Processing...
+            Processing...
           </Tag>
         )}
       </Space>
@@ -514,29 +578,37 @@ const EditorToolbar = ({ editor, token, onSiderCollapse, isAnalysing }) => {
 };
 
 // ==========================================
-// 5. MAIN EDITOR COMPONENT
+// 4. MAIN EDITOR LOGIC
 // ==========================================
 
-export const ScriptEditor = ({ provider, onSiderCollapse }) => {
+export const ScriptEditor = ({ provider }) => {
+  const { onSiderCollapse, focusRequest, currentTime } =
+    useContext(ScriptStateContext);
+
   const { user } = useOutletContext() || { user: { username: "Guest" } };
   const { token } = theme.useToken();
-  const [isAnalysing, setIsAnalysing] = useState(false);
-  const debounceRef = useRef(null);
 
+  const [isAnalysing, setIsAnalysing] = useState(false);
+  const [autoAnalyze, setAutoAnalyze] = useState(true);
+  const debounceRef = useRef(null);
+  const lastAutoScrollTime = useRef(-1);
+
+  // 1. Core Update Handler
   const handleContentUpdate = useCallback(
-    (json) => {
-      // 1. Instant Local Parse
+    ({ editor, transaction }) => {
+      if (!transaction.docChanged) return;
+
+      const json = editor.getJSON();
       const { scenes, characters, interactions } = analyzeScriptLocal({
         content: json.content,
       });
 
-      // 2. Local Merge & Write
       const analysisMap = provider.document.getMap("script_analysis");
+
       provider.document.transact(() => {
         const existingScenes = analysisMap.get("scenes") || [];
         const existingChars = analysisMap.get("characters") || [];
 
-        // MERGE SCENES
         const mergedScenes = scenes.map((newScene) => {
           const oldScene = existingScenes.find((ex) => ex.id === newScene.id);
           if (oldScene && oldScene.metrics) {
@@ -544,10 +616,8 @@ export const ScriptEditor = ({ provider, onSiderCollapse }) => {
               ...newScene,
               synopsis: oldScene.synopsis || newScene.synopsis,
               metrics: {
-                ...newScene.metrics, // Local (actionRatio, etc)
-                pacing: oldScene.metrics.pacing, // AI
-                sentiment: oldScene.metrics.sentiment, // AI
-                // linguisticDensity: kept from local logic or AI
+                ...newScene.metrics,
+                sentiment: oldScene.metrics.sentiment,
               },
             };
           }
@@ -555,13 +625,12 @@ export const ScriptEditor = ({ provider, onSiderCollapse }) => {
         });
         analysisMap.set("scenes", mergedScenes);
 
-        // MERGE CHARACTERS
         const mergedChars = characters.map((newChar) => {
           const oldChar = existingChars.find((ex) => ex.id === newChar.id);
           if (oldChar && oldChar.metrics) {
             return {
               ...newChar,
-              emotion: oldChar.emotion || newChar.emotion,
+              emotion: oldChar.emotion || "neutral",
               metrics: {
                 ...newChar.metrics,
                 degreeCentrality: oldChar.metrics.degreeCentrality,
@@ -584,69 +653,26 @@ export const ScriptEditor = ({ provider, onSiderCollapse }) => {
         analysisMap.set("characters", mergedChars);
       });
 
-      // 3. AI Enrichment
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(async () => {
-        setIsAnalysing(true);
-        try {
-          const netMetrics = await analyzeNetworkAI(interactions);
-          const scenePromises = scenes.map((s) =>
-            analyzeSceneAI(s.id, s.rawText)
-          );
-          const enrichedScenesRaw = await Promise.all(scenePromises);
+      const settingsMap = provider.document.getMap("script_settings");
+      const isAuto = settingsMap.get("autoAnalyze") ?? true;
 
-          const charPromises = characters.map((c) => {
-            if (c.dialogueCount > 2) return analyzeEmotionAI(c.allDialogueText);
-            return Promise.resolve(null);
-          });
-          const enrichedEmotionsRaw = await Promise.all(charPromises);
+      if (isAuto) {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
 
-          provider.document.transact(() => {
-            const currentScenes = analysisMap.get("scenes") || [];
-            const currentChars = analysisMap.get("characters") || [];
+        debounceRef.current = setTimeout(() => {
+          const currentHash = generateContentHash(scenes, characters);
+          const lastHash = settingsMap.get("lastContentHash");
 
-            const finalScenes = currentScenes.map((s, idx) => {
-              const aiData = enrichedScenesRaw[idx];
-              if (!aiData) return s;
-              return {
-                ...s,
-                synopsis: aiData.synopsis,
-                metrics: {
-                  ...s.metrics,
-                  pacing: aiData.metrics?.linguisticDensity || s.metrics.pacing,
-                  sentiment: aiData.metrics?.sentiment || 0,
-                },
-              };
-            });
-            analysisMap.set("scenes", finalScenes);
-
-            const finalChars = currentChars.map((c, idx) => {
-              const aiEmo = enrichedEmotionsRaw.find(
-                (_, i) => characters[i]?.id === c.id
-              );
-              const netMetric = netMetrics ? netMetrics[c.name] : null;
-              return {
-                ...c,
-                emotion: aiEmo?.dominant || c.emotion || "neutral",
-                metrics: {
-                  ...c.metrics,
-                  degreeCentrality: netMetric?.degreeCentrality || 0,
-                  betweenness: netMetric?.betweenness || 0,
-                },
-              };
-            });
-            analysisMap.set("characters", finalChars);
-          });
-        } catch (err) {
-          console.error("AI Pipeline Failed:", err);
-        } finally {
-          setIsAnalysing(false);
-        }
-      }, 2500);
+          if (currentHash !== lastHash) {
+            runAIAnalysis(scenes, characters, interactions, currentHash);
+          }
+        }, 2500);
+      }
     },
     [provider]
   );
 
+  // 2. Initialize Editor - MUST BE BEFORE SCROLL LOGIC
   const editor = useEditor(
     {
       extensions: [
@@ -658,12 +684,175 @@ export const ScriptEditor = ({ provider, onSiderCollapse }) => {
           user: { name: user.username, color: token.colorPrimary },
         }),
       ],
-      onUpdate: ({ editor }) => {
-        handleContentUpdate(editor.getJSON());
-      },
+      onUpdate: handleContentUpdate,
     },
     [provider]
   );
+
+  // 3. Scroll Logic (Now has access to initialized 'editor')
+  const scrollToTime = useCallback(
+    (targetTime) => {
+      if (!editor) return;
+
+      // Jitter threshold
+      if (Math.abs(targetTime - lastAutoScrollTime.current) < 0.1) return;
+
+      let accumulatedTime = 0;
+      let foundPos = null;
+
+      editor.state.doc.forEach((node, offset) => {
+        if (foundPos !== null) return;
+
+        const type = node.attrs.scriptType || "action";
+        let duration = 0;
+        if (type === "scene") duration = 0;
+        else if (type === "dialogue") duration = 3;
+        else if (type === "action") duration = 2;
+
+        if (node.textContent.trim().length > 0 || type === "scene") {
+          if (accumulatedTime + duration >= targetTime) {
+            foundPos = offset;
+            return;
+          }
+          accumulatedTime += duration;
+        }
+      });
+
+      if (foundPos !== null) {
+        //
+        // Native DOM scroll is more reliable than Tiptap's selection based scroll here
+        const domNode = editor.view.nodeDOM(foundPos);
+        if (domNode && domNode.scrollIntoView) {
+          domNode.scrollIntoView({ block: "center", behavior: "auto" });
+
+          // Optional: Update selection to highlight line without forcing focus
+          try {
+            editor.commands.setTextSelection(foundPos + 1);
+          } catch (e) {
+            /* ignore selection errors if out of focus */
+          }
+        }
+        lastAutoScrollTime.current = targetTime;
+      }
+    },
+    [editor]
+  );
+
+  // 4. Define Analysis Runner
+  const runAIAnalysis = async (
+    scenes,
+    characters,
+    interactions,
+    currentHash
+  ) => {
+    setIsAnalysing(true);
+    try {
+      const netMetrics = await analyzeNetworkAI(interactions);
+      const scenePromises = scenes.map((s) => analyzeSceneAI(s.id, s.rawText));
+      const enrichedScenesRaw = await Promise.all(scenePromises);
+
+      const charPromises = characters.map((c) => {
+        if (c.dialogueCount > 2) return analyzeEmotionAI(c.allDialogueText);
+        return Promise.resolve(null);
+      });
+      const enrichedEmotionsRaw = await Promise.all(charPromises);
+
+      provider.document.transact(() => {
+        const settingsMap = provider.document.getMap("script_settings");
+        settingsMap.set("lastContentHash", currentHash);
+
+        const analysisMap = provider.document.getMap("script_analysis");
+        const currentScenes = analysisMap.get("scenes") || [];
+        const currentChars = analysisMap.get("characters") || [];
+
+        const finalScenes = currentScenes.map((s, idx) => {
+          const aiData = enrichedScenesRaw[idx];
+          if (!aiData) return s;
+          return {
+            ...s,
+            synopsis: aiData.synopsis || s.synopsis,
+            metrics: {
+              ...s.metrics,
+              pacing: aiData.metrics?.linguisticDensity || s.metrics.pacing,
+              sentiment: aiData.metrics?.sentiment || s.metrics.sentiment,
+            },
+          };
+        });
+        analysisMap.set("scenes", finalScenes);
+
+        const finalChars = currentChars.map((c, idx) => {
+          const aiEmo = enrichedEmotionsRaw.find(
+            (_, i) => characters[i]?.id === c.id
+          );
+          const netMetric = netMetrics ? netMetrics[c.name] : null;
+          return {
+            ...c,
+            emotion: aiEmo?.dominant || c.emotion || "neutral",
+            metrics: {
+              ...c.metrics,
+              degreeCentrality: netMetric?.degreeCentrality || 0,
+              betweenness: netMetric?.betweenness || 0,
+            },
+          };
+        });
+        analysisMap.set("characters", finalChars);
+      });
+    } catch (err) {
+      console.error("AI Pipeline Failed:", err);
+    } finally {
+      setIsAnalysing(false);
+    }
+  };
+
+  // 5. Manual Trigger
+  const handleManualAnalysis = () => {
+    if (!editor) return;
+    const json = editor.getJSON();
+    const { scenes, characters, interactions } = analyzeScriptLocal({
+      content: json.content,
+    });
+    const currentHash = generateContentHash(scenes, characters);
+    runAIAnalysis(scenes, characters, interactions, currentHash);
+  };
+
+  const handleToggleAuto = (checked) => {
+    setAutoAnalyze(checked);
+    if (provider) {
+      provider.document.getMap("script_settings").set("autoAnalyze", checked);
+    }
+  };
+
+  // 6. Effects
+  useEffect(() => {
+    if (currentTime !== undefined) {
+      scrollToTime(currentTime);
+    }
+  }, [currentTime, scrollToTime]);
+
+  useEffect(() => {
+    if (focusRequest) {
+      scrollToTime(focusRequest.timestamp || 0);
+      if (editor) editor.commands.focus();
+    }
+  }, [focusRequest, scrollToTime]);
+
+  useEffect(() => {
+    if (!provider) return;
+    const settingsMap = provider.document.getMap("script_settings");
+
+    if (settingsMap.has("autoAnalyze")) {
+      setAutoAnalyze(settingsMap.get("autoAnalyze"));
+    }
+
+    const handleSettingsChange = () => {
+      if (settingsMap.has("autoAnalyze")) {
+        setAutoAnalyze(settingsMap.get("autoAnalyze"));
+      }
+    };
+
+    settingsMap.observe(handleSettingsChange);
+    return () => settingsMap.unobserve(handleSettingsChange);
+  }, [provider]);
 
   return (
     <>
@@ -691,6 +880,9 @@ export const ScriptEditor = ({ provider, onSiderCollapse }) => {
           token={token}
           onSiderCollapse={onSiderCollapse}
           isAnalysing={isAnalysing}
+          autoAnalyze={autoAnalyze}
+          onToggleAuto={handleToggleAuto}
+          onTriggerAnalysis={handleManualAnalysis}
         />
         <div
           style={{ flex: 1, overflowY: "auto", cursor: "text" }}

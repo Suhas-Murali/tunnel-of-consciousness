@@ -29,9 +29,7 @@ import {
 
 const { Title, Text, Paragraph } = Typography;
 
-// ==========================================
-// HELPER: Color Generator
-// ==========================================
+// Helper for generating colors for Characters (Scenes now have colors in data)
 const stringToColor = (str) => {
   let hash = 0;
   for (let i = 0; i < str.length; i++)
@@ -40,25 +38,32 @@ const stringToColor = (str) => {
   return "#" + "00000".substring(0, 6 - c.length) + c;
 };
 
-// ==========================================
-// SCENE OVERVIEW COMPONENT
-// ==========================================
-
 export const SceneOverview = ({ provider }) => {
   const { token } = theme.useToken();
   const [scenes, setScenes] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
 
+  // --- 1. Subscribe to YJS Data (Passive Read) ---
   useEffect(() => {
     if (!provider) return;
     const map = provider.document.getMap("script_analysis");
+
     const updateHandler = () => {
-      setScenes(map.get("scenes") || []);
+      const loadedScenes = map.get("scenes") || [];
+      setScenes(loadedScenes);
     };
+
     updateHandler();
     map.observe(updateHandler);
     return () => map.unobserve(updateHandler);
   }, [provider]);
+
+  // Auto-select first scene on load
+  useEffect(() => {
+    if (!selectedId && scenes.length > 0) {
+      setSelectedId(scenes[0].id);
+    }
+  }, [scenes, selectedId]);
 
   const activeScene = useMemo(
     () => scenes.find((s) => s.id === selectedId),
@@ -74,6 +79,7 @@ export const SceneOverview = ({ provider }) => {
         background: token.colorBgContainer,
       }}
     >
+      {/* Selector Header */}
       <div
         style={{
           padding: "12px 16px",
@@ -95,7 +101,7 @@ export const SceneOverview = ({ provider }) => {
                     width: 10,
                     height: 10,
                     borderRadius: 2,
-                    backgroundColor: s.color || "#ccc", // Fallback color
+                    backgroundColor: s.color || "#ccc",
                   }}
                 />
                 {s.name}
@@ -105,17 +111,18 @@ export const SceneOverview = ({ provider }) => {
         />
       </div>
 
+      {/* Content Area */}
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
         {!selectedId || !activeScene ? (
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="No Scene Selected"
+            description="No Scene Data Available"
             style={{ marginTop: 40 }}
           />
         ) : (
           <div>
+            {/* Header Metrics */}
             <div style={{ marginBottom: 20 }}>
-              {/* Header & Structural Beat */}
               <div
                 style={{
                   display: "flex",
@@ -142,6 +149,7 @@ export const SceneOverview = ({ provider }) => {
               </Space>
             </div>
 
+            {/* Synopsis */}
             <Paragraph
               type="secondary"
               style={{
@@ -150,9 +158,10 @@ export const SceneOverview = ({ provider }) => {
                 paddingLeft: 12,
               }}
             >
-              {activeScene.synopsis || "Analyzing..."}
+              {activeScene.synopsis || "Waiting for analysis..."}
             </Paragraph>
 
+            {/* Metrics Grid */}
             {activeScene.metrics && (
               <>
                 <Divider orientation="left" style={{ fontSize: 13 }}>
@@ -173,6 +182,7 @@ export const SceneOverview = ({ provider }) => {
                         style={{ width: "100%" }}
                         size={0}
                       >
+                        {/* Pacing */}
                         <div
                           style={{
                             display: "flex",
@@ -197,6 +207,7 @@ export const SceneOverview = ({ provider }) => {
                           style={{ marginBottom: 8 }}
                         />
 
+                        {/* Read Speed */}
                         <div
                           style={{
                             display: "flex",
@@ -322,6 +333,7 @@ export const SceneOverview = ({ provider }) => {
               </div>
             </div>
 
+            {/* Character List */}
             <List
               size="small"
               header={

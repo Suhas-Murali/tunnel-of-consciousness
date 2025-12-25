@@ -1,12 +1,10 @@
-import React, { useRef, useState, useEffect } from "react";
-import { theme, Tooltip, Typography } from "antd";
+import { useRef, useState, useEffect, useContext } from "react";
+import { Tooltip, Typography } from "antd";
 import { CaretDownOutlined } from "@ant-design/icons";
+import { ScriptStateContext } from "../contexts";
 
 const { Text } = Typography;
 
-// ==========================================
-// HELPER: Format Seconds to MM:SS
-// ==========================================
 const formatTime = (seconds) => {
   if (!seconds && seconds !== 0) return "--:--";
   const m = Math.floor(seconds / 60);
@@ -14,67 +12,56 @@ const formatTime = (seconds) => {
   return `${m}:${s < 10 ? "0" : ""}${s}`;
 };
 
-// ==========================================
-// TIMELINE COMPONENT
-// ==========================================
+export const Timeline = ({ provider, token }) => {
+  const { currentTime, setCurrentTime } = useContext(ScriptStateContext);
 
-export const Timeline = ({ provider }) => {
-  const { token } = theme.useToken();
   const containerRef = useRef(null);
-
-  // Data State
   const [scenes, setScenes] = useState([]);
-  const [totalDuration, setTotalDuration] = useState(1); // Avoid div by 0
-
-  // UI State
-  const [progress, setProgress] = useState(0); // 0 to 100
+  const [totalDuration, setTotalDuration] = useState(1);
   const [isDragging, setIsDragging] = useState(false);
 
-  // --- 1. SUBSCRIBE TO YJS DATA ---
   useEffect(() => {
     if (!provider) return;
     const map = provider.document.getMap("script_analysis");
-
     const updateHandler = () => {
       const sceneData = map.get("scenes") || [];
-
-      // Calculate start/end times for each scene for rendering
       let accumulatedTime = 0;
       const processed = sceneData.map((s) => {
         const start = accumulatedTime;
-        const duration = s.durationSecs || 10; // Fallback 10s
+        const duration = s.durationSecs || 10;
         accumulatedTime += duration;
         return { ...s, startTime: start, endTime: start + duration };
       });
-
       setScenes(processed);
-      setTotalDuration(Math.max(accumulatedTime, 1)); // Ensure at least 1s
+      setTotalDuration(Math.max(accumulatedTime, 1));
     };
-
-    updateHandler(); // Initial load
+    updateHandler();
     map.observe(updateHandler);
     return () => map.unobserve(updateHandler);
   }, [provider]);
 
-  // --- 2. INTERACTION HANDLERS ---
-  const handleSeek = (e) => {
-    if (!containerRef.current) return;
+  const calculateTimeFromEvent = (e) => {
+    if (!containerRef.current) return 0;
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const width = rect.width;
-    let newProgress = (x / width) * 100;
-    newProgress = Math.max(0, Math.min(100, newProgress));
-    setProgress(newProgress);
+    let percentage = x / width;
+    percentage = Math.max(0, Math.min(1, percentage));
+    return percentage * totalDuration;
   };
 
   const handleMouseDown = (e) => {
     setIsDragging(true);
-    handleSeek(e);
+    const newTime = calculateTimeFromEvent(e);
+    setCurrentTime(newTime); // Use Context Setter
   };
 
   useEffect(() => {
     const handleWindowMouseMove = (e) => {
-      if (isDragging) handleSeek(e);
+      if (isDragging) {
+        const newTime = calculateTimeFromEvent(e);
+        setCurrentTime(newTime);
+      }
     };
     const handleWindowMouseUp = () => setIsDragging(false);
 
@@ -86,9 +73,9 @@ export const Timeline = ({ provider }) => {
       window.removeEventListener("mousemove", handleWindowMouseMove);
       window.removeEventListener("mouseup", handleWindowMouseUp);
     };
-  }, [isDragging]);
+  }, [isDragging, totalDuration, setCurrentTime]);
 
-  const currentTime = (progress / 100) * totalDuration;
+  const progressPercent = (currentTime / totalDuration) * 100;
 
   return (
     <div
@@ -103,7 +90,6 @@ export const Timeline = ({ provider }) => {
         userSelect: "none",
       }}
     >
-      {/* Time Indicator Header */}
       <div
         style={{
           display: "flex",
@@ -113,7 +99,7 @@ export const Timeline = ({ provider }) => {
         }}
       >
         <Text strong style={{ fontSize: 12 }}>
-          TIMELINE
+          Breakdown
         </Text>
         <div
           style={{
@@ -128,29 +114,28 @@ export const Timeline = ({ provider }) => {
             {formatTime(currentTime)}
           </span>
           <span style={{ color: token.colorTextQuaternary }}> / </span>
-          <span>{formatTime(totalDuration)}</span>
+          <span style={{ color: token.colorTextSecondary }}>
+            {formatTime(totalDuration)}
+          </span>
         </div>
       </div>
 
-      {/* Timeline Track Area */}
       <div
         ref={containerRef}
         onMouseDown={handleMouseDown}
         style={{
           position: "relative",
-          height: 24, // Vertically thinner
+          height: 20,
           background: token.colorFillTertiary,
           borderRadius: 4,
           cursor: "pointer",
           overflow: "hidden",
         }}
       >
-        {/* Scenes Segments */}
         {scenes.map((scene) => {
           const widthPerc =
             ((scene.endTime - scene.startTime) / totalDuration) * 100;
           const leftPerc = (scene.startTime / totalDuration) * 100;
-
           return (
             <Tooltip
               key={scene.id}
@@ -181,8 +166,6 @@ export const Timeline = ({ provider }) => {
             </Tooltip>
           );
         })}
-
-        {/* Ruler Ticks (Every 10%) */}
         {Array.from({ length: 11 }).map((_, i) => (
           <div
             key={i}
@@ -190,19 +173,17 @@ export const Timeline = ({ provider }) => {
               position: "absolute",
               left: `${i * 10}%`,
               bottom: 0,
-              height: 6,
-              width: 1,
+              height: 8,
+              width: 2,
               background: token.colorTextQuaternary,
               opacity: 0.5,
             }}
           />
         ))}
-
-        {/* Scrubber Head & Line */}
         <div
           style={{
             position: "absolute",
-            left: `${progress}%`,
+            left: `${progressPercent}%`,
             top: 0,
             bottom: 0,
             width: 2,
