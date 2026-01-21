@@ -269,10 +269,10 @@ const analyzeScriptLocal = (doc) => {
         pacing: pacing,
         linguisticDensity: Math.min(
           100,
-          Math.round((s.rawText.length / Math.max(1, s.durationSecs)) * 2)
+          Math.round((s.rawText.length / Math.max(1, s.durationSecs)) * 2),
         ),
         actionRatio: Math.round(
-          (s.actionLines / Math.max(1, totalLines)) * 100
+          (s.actionLines / Math.max(1, totalLines)) * 100,
         ),
         sentiment: 0,
         structuralBeat: structuralBeat,
@@ -302,8 +302,8 @@ const analyzeScriptLocal = (doc) => {
       c.dialogueCount > 50
         ? "The Protagonist"
         : c.dialogueCount > 20
-        ? "The Lancer"
-        : "Support";
+          ? "The Lancer"
+          : "Support";
 
     return {
       ...c,
@@ -453,7 +453,7 @@ const ScreenplayExtension = TiptapParagraph.extend({
               text.length < 50 &&
               !text.endsWith(":") &&
               !text.includes(
-                (n) => n === n.toLowerCase() && n !== n.toUpperCase()
+                (n) => n === n.toLowerCase() && n !== n.toUpperCase(),
               )
             )
               newType = "character";
@@ -581,9 +581,8 @@ const EditorToolbar = ({
 // 4. MAIN EDITOR LOGIC
 // ==========================================
 
-export const ScriptEditor = ({ provider }) => {
-  const { onSiderCollapse, focusRequest, currentTime } =
-    useContext(ScriptStateContext);
+export const ScriptEditor = ({ onSiderCollapse, provider }) => {
+  const { focusRequest, currentTime } = useContext(ScriptStateContext);
 
   const { user } = useOutletContext() || { user: { username: "Guest" } };
   const { token } = theme.useToken();
@@ -669,7 +668,7 @@ export const ScriptEditor = ({ provider }) => {
         }, 2500);
       }
     },
-    [provider]
+    [provider],
   );
 
   // 2. Initialize Editor - MUST BE BEFORE SCROLL LOGIC
@@ -686,7 +685,7 @@ export const ScriptEditor = ({ provider }) => {
       ],
       onUpdate: handleContentUpdate,
     },
-    [provider]
+    [provider],
   );
 
   // 3. Scroll Logic (Now has access to initialized 'editor')
@@ -735,7 +734,7 @@ export const ScriptEditor = ({ provider }) => {
         lastAutoScrollTime.current = targetTime;
       }
     },
-    [editor]
+    [editor],
   );
 
   // 4. Define Analysis Runner
@@ -743,7 +742,7 @@ export const ScriptEditor = ({ provider }) => {
     scenes,
     characters,
     interactions,
-    currentHash
+    currentHash,
   ) => {
     setIsAnalysing(true);
     try {
@@ -782,7 +781,7 @@ export const ScriptEditor = ({ provider }) => {
 
         const finalChars = currentChars.map((c, idx) => {
           const aiEmo = enrichedEmotionsRaw.find(
-            (_, i) => characters[i]?.id === c.id
+            (_, i) => characters[i]?.id === c.id,
           );
           const netMetric = netMetrics ? netMetrics[c.name] : null;
           return {

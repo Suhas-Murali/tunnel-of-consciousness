@@ -1,0 +1,114 @@
+digraph BackendArchitecture {
+    // ------------------------------------
+    // GLOBAL SETTINGS
+    // ------------------------------------
+    rankdir=LR;
+    splines=ortho;
+    nodesep=0.6;
+    ranksep=0.8;
+    fontname="Helvetica";
+    fontsize=14;
+    compound=true;
+    label="Backend Architecture: Request Flow & Data Persistence";
+
+    // Default Node Styling
+    node [shape=box, style="filled,rounded", fontname="Helvetica", penwidth=0, margin=0.2];
+    edge [fontname="Helvetica", fontsize=9, color="#555555"];
+
+    // ------------------------------------
+    // CLIENT LAYER (Abstract)
+    // ------------------------------------
+    Client [
+        shape=circle, 
+        label="Client", 
+        style=filled, 
+        fillcolor="#CFD8DC", 
+        width=1.0
+    ];
+
+    // ------------------------------------
+    // SERVER CONTAINER
+    // ------------------------------------
+    subgraph cluster_server {
+        label="Node.js / Express Server";
+        style=filled;
+        color="#FFF3E0";       // Light Orange
+        fontcolor="#E65100";
+
+        // Entry Point
+        Express [label="Express App", fillcolor="#FFCC80"];
+
+        // Security Middleware Group
+        subgraph cluster_security {
+            label="Security Middleware";
+            style=dashed;
+            color="#FFB74D";
+            
+            CORS [label="CORS\n(Origin Check)", fillcolor="#FFE0B2"];
+            AuthGuard [label="JWT Guard\n(Verify HttpOnly Cookie)", fillcolor="#FFE0B2"];
+        }
+
+        // Route Handlers
+        subgraph cluster_routes {
+            label="Route Controllers";
+            style=invis;
+            
+            AuthRoute [label="/auth\n(Login/Register)", fillcolor="#FFAB91"];
+            ScriptRoute [label="/script\n(CRUD Operations)", fillcolor="#FFAB91"];
+        }
+
+        // Real-time Service
+        Hocuspocus [
+            label="Hocuspocus Server\n(WebSockets)", 
+            fillcolor="#C8E6C9", // Light Green distinction
+            color="#388E3C"
+        ];
+    }
+
+    // ------------------------------------
+    // DATA LAYER
+    // ------------------------------------
+    subgraph cluster_db {
+        label="Persistence Layer";
+        style=filled;
+        color="#ECEFF1";
+
+        MongoDB [
+            shape=cylinder, 
+            label="MongoDB", 
+            fillcolor="#B0BEC5", 
+            color="#546E7A"
+        ];
+    }
+
+    // ------------------------------------
+    // CONNECTIONS & LOGIC FLOW
+    // ------------------------------------
+
+    // 1. Initial Request
+    Client -> Express [xlabel="HTTP Request"];
+    Client -> Hocuspocus [xlabel="WS Connection"];
+
+    // 2. Middleware Chain
+    Express -> CORS;
+    CORS -> AuthGuard [xlabel="Next()"];
+
+    // 3. Routing (Branching)
+    // We use a dummy node or direct logic to show routing
+    AuthGuard -> AuthRoute [xlabel="Public/Private"];
+    AuthGuard -> ScriptRoute [xlabel="Authorized"];
+
+    // 4. Database Interactions
+    AuthRoute -> MongoDB [xlabel="User Profile"];
+    ScriptRoute -> MongoDB [xlabel="Script Metadata"];
+    
+    // WebSocket Persistence
+    Hocuspocus -> MongoDB [xlabel="Sync Yjs Blobs"];
+
+    // 5. Authentication Logic (Visualizing the return)
+    AuthRoute -> Client [style=dashed, color="#E65100", xlabel="Set HttpOnly Cookie"];
+
+    // Invisible edges to help layout
+    edge [style=invis];
+    CORS -> Hocuspocus;
+}

@@ -2,8 +2,10 @@ fastapi
 uvicorn
 pydantic
 transformers
+pipeline
 torch
 networkx
 numpy
 scipy
 textstat
+hf_xet

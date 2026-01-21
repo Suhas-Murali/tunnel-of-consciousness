@@ -1,0 +1,122 @@
+digraph InferenceService {
+    // ------------------------------------
+    // GLOBAL SETTINGS
+    // ------------------------------------
+    rankdir=TB;
+    splines=polyline;          // Polyline handles "fan-out" connections better than ortho
+    nodesep=0.6;
+    ranksep=0.8;
+    fontname="Helvetica";
+    fontsize=14;
+    compound=true;
+    label="Inference Service: Memory State & Request Handling";
+
+    // Default Styling
+    node [shape=box, style="filled,rounded", fontname="Helvetica", penwidth=0, margin=0.2];
+    edge [fontname="Helvetica", fontsize=9, color="#555555"];
+
+    // ------------------------------------
+    // EXTERNAL ACTOR
+    // ------------------------------------
+    Backend [
+        label="Node.js Backend", 
+        shape=box, 
+        style="dashed,rounded",
+        fillcolor="#FFF3E0", 
+        color="#E65100"
+    ];
+
+    // ------------------------------------
+    // PYTHON MICROSERVICE CONTAINER
+    // ------------------------------------
+    subgraph cluster_python_service {
+        label="Python Microservice (FastAPI)";
+        style=filled;
+        color="#E8F5E9";       // Light Green background
+        fontcolor="#2E7D32";
+
+        // ------------------------------------
+        // LAYER 1: API GATEWAY
+        // ------------------------------------
+        Uvicorn [
+            label="Uvicorn (ASGI Server)", 
+            fillcolor="#A5D6A7", 
+            color="#388E3C"
+        ];
+        
+        Router [
+            label="FastAPI Router", 
+            fillcolor="#C8E6C9", 
+            color="#4CAF50"
+        ];
+
+        // ------------------------------------
+        // LAYER 2: LOGIC HANDLERS
+        // ------------------------------------
+        subgraph cluster_handlers {
+            label="Request Handlers";
+            style=invis;
+            
+            Handler_NER [label="/ner\nEndpoint", fillcolor="#DCEDC8"];
+            Handler_Sent [label="/sentiment\nEndpoint", fillcolor="#DCEDC8"];
+            Handler_Syn [label="/synopsis\nEndpoint", fillcolor="#DCEDC8"];
+        }
+
+        // ------------------------------------
+        // LAYER 3: IN-MEMORY MODELS (Global State)
+        // ------------------------------------
+        subgraph cluster_memory {
+            label="In-Memory Model Registry (Pre-loaded)";
+            style=filled;
+            color="#FFFFFF";   // White box to represent pure RAM/Storage
+            fontcolor="#455A64";
+            
+            Model_NER [
+                label=<<B>NER Model</B><BR/>(Token Classification)>, 
+                shape=component, 
+                fillcolor="#B39DDB", // Purple for models
+                color="#5E35B1"
+            ];
+
+            Model_Sent [
+                label=<<B>Sentiment Model</B><BR/>(Sequence Classification)>, 
+                shape=component, 
+                fillcolor="#B39DDB", 
+                color="#5E35B1"
+            ];
+
+            Model_Syn [
+                label=<<B>Synopsis Model</B><BR/>(Seq2Seq Generation)>, 
+                shape=component, 
+                fillcolor="#B39DDB", 
+                color="#5E35B1"
+            ];
+        }
+    }
+
+    // ------------------------------------
+    // FLOW LOGIC
+    // ------------------------------------
+
+    // Ingress
+    Backend -> Uvicorn [label="POST /analyze (JSON)"];
+    Uvicorn -> Router [label="Forward"];
+
+    // Routing
+    Router -> Handler_NER;
+    Router -> Handler_Sent;
+    Router -> Handler_Syn;
+
+    // Inference Execution (Handlers invoke Models)
+    Handler_NER -> Model_NER [label="infer()"];
+    Handler_Sent -> Model_Sent [label="infer()"];
+    Handler_Syn -> Model_Syn [label="generate()"];
+
+    // Return Path (Implicitly visualized as the response)
+    // We use a dummy edge back to backend to close the loop visually
+    Model_Syn -> Backend [style=dashed, color="#2E7D32", xlabel="JSON Response"];
+    
+    // Invisible edges to keep alignment neat
+    edge [style=invis];
+    Handler_NER -> Handler_Sent -> Handler_Syn;
+}

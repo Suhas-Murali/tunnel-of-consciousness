@@ -1,0 +1,90 @@
+digraph TunnelOfConsciousness {
+    // Graph Settings
+    rankdir=LR;
+    splines=ortho;             
+    nodesep=0.8;               // Increased slightly for label space
+    ranksep=1.2;               
+    fontname="Helvetica";
+    fontsize=14;
+    labelloc="t";
+    label="System Architecture: Tunnel of Consciousness";
+
+    // Default Node Settings
+    node [shape=box, style="filled,rounded", fontname="Helvetica", margin=0.2, fontsize=10];
+    edge [fontname="Helvetica", fontsize=9, color="#555555"];
+
+    // ----------------------
+    // FRONTEND LAYER
+    // ----------------------
+    subgraph cluster_frontend {
+        label="Frontend Layer";
+        style=filled;
+        color="#E3F2FD";
+        node [fillcolor="#BBDEFB", color="#64B5F6"];
+
+        {rank=same; React; Antd; RCDock;}
+        {rank=same; ThreeJS; Tiptap; Yjs;}
+
+        // Internal edges (dotted)
+        React -> ThreeJS [style=dotted, arrowhead=none];
+        React -> Tiptap [style=dotted, arrowhead=none];
+    }
+
+    // ----------------------
+    // BACKEND LAYER
+    // ----------------------
+    subgraph cluster_backend {
+        label="Backend Layer";
+        style=filled;
+        color="#FFF3E0";
+        node [fillcolor="#FFE0B2", color="#FFB74D"];
+
+        MongoDB [shape=cylinder, fillcolor="#FFCC80"];
+        Express;
+        Hocuspocus;
+        
+        {rank=same; JWT; Cors; WS;}
+
+        Express -> JWT [style=dotted, arrowhead=none];
+        Express -> Cors [style=dotted, arrowhead=none];
+        Hocuspocus -> WS [style=dotted, arrowhead=none];
+    }
+
+    // ----------------------
+    // INFERENCE LAYER
+    // ----------------------
+    subgraph cluster_inference {
+        label="Inference Layer";
+        style=filled;
+        color="#E8F5E9";
+        node [fillcolor="#C8E6C9", color="#81C784"];
+
+        FastAPI;
+        Uvicorn;
+        PyTorch;
+        Transformers;
+
+        Uvicorn -> FastAPI [style=dashed]; // Removed label to reduce clutter
+        FastAPI -> PyTorch;
+        PyTorch -> Transformers;
+    }
+
+    // ----------------------
+    // INTERACTIONS (Using xlabel)
+    // ----------------------
+    
+    // Frontend -> Backend
+    React -> Express [xlabel="HTTP/REST"];
+    Yjs -> Hocuspocus [xlabel="WebSocket"];
+    
+    // Backend -> Database
+    Express -> MongoDB [xlabel="Read/Write"];
+    Hocuspocus -> MongoDB [xlabel="Persistence"];
+
+    // Backend -> Inference
+    Express -> FastAPI [xlabel="Inference Req"];
+
+    // Force some spacing to prevent xlabels from overlapping nodes
+    edge [style=invis];
+    React -> MongoDB; 
+}

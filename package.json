@@ -6,6 +6,7 @@
   },
   "scripts": {
     "postinstall": "(cd frontend && npm install); (cd backend && npm install);",
-    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\""
+    "dev-windows": "concurrently \"npm run dev-windows --prefix backend\" \"npm run dev --prefix frontend\"",
+    "dev-linux": "concurrently \"npm run dev-linux --prefix backend\" \"npm run dev --prefix frontend\""
   }
 }

@@ -1,0 +1,96 @@
+digraph FrontendDeepDive {
+    // ------------------------------------
+    // GLOBAL SETTINGS
+    // ------------------------------------
+    rankdir=TB;                
+    splines=ortho;             
+    nodesep=0.6;               
+    ranksep=0.8;               
+    fontname="Helvetica";
+    fontsize=14;
+    compound=true;             
+    label="Frontend Architecture: Component Composition";
+    
+    // Default Styling
+    node [shape=box, style="filled,rounded", fontname="Helvetica", penwidth=0, margin=0.2];
+    edge [fontname="Helvetica", fontsize=9, color="#555555"];
+
+    // ------------------------------------
+    // REACT APPLICATION CONTEXT
+    // ------------------------------------
+    subgraph cluster_react {
+        label="React Application Context";
+        style=filled;
+        color="#E1F5FE";       
+        fontcolor="#0277BD";
+        
+        // ------------------------------------
+        // LAYOUT MANAGER (rc-dock)
+        // ------------------------------------
+        subgraph cluster_layout {
+            label="Layout Engine (rc-dock)";
+            style=filled;
+            color="#FFFFFF";   
+            fontcolor="#455A64";
+            
+            // The Dock Manager Node
+            RCDock [
+                label=<<B>rc-dock</B><BR/>Customizable Dashboard>, 
+                fillcolor="#B0BEC5", 
+                color="#78909C"
+            ];
+
+            // ------------------------------------
+            // VISUALIZATION PANEL
+            // ------------------------------------
+            ThreeJS [
+                label=<<B>Three.js</B><BR/>Tunnel Geometry Rendering>, 
+                fillcolor="#FFCCBC", 
+                color="#FF7043"
+            ];
+
+            // ------------------------------------
+            // EDITOR PANEL
+            // ------------------------------------
+            Tiptap [
+                label=<<B>Tiptap</B><BR/>Reactive Text Editor>, 
+                fillcolor="#C8E6C9", 
+                color="#66BB6A"
+            ];
+
+            // ------------------------------------
+            // UI PANEL
+            // ------------------------------------
+            Antd [
+                label=<<B>Ant Design (Antd)</B><BR/>Forms, Data Handling>, 
+                fillcolor="#E1BEE7", 
+                color="#AB47BC"
+            ];
+        }
+
+        // ------------------------------------
+        // DATA SYNC LAYER
+        // ------------------------------------
+        Yjs [
+            label=<<B>Yjs</B><BR/>CRDT / Data Synchronization>, 
+            shape=note, 
+            fillcolor="#FFF9C4", 
+            color="#FBC02D"
+        ];
+    }
+
+    // ------------------------------------
+    // CONNECTIONS
+    // ------------------------------------
+    
+    // Layout managing the components
+    RCDock -> ThreeJS [dir=both, arrowtail=diamond, label=""];
+    RCDock -> Tiptap  [dir=both, arrowtail=diamond, label=""];
+    RCDock -> Antd    [dir=both, arrowtail=diamond, label=""];
+
+    // Data flow interactions (Using xlabel to fix warning)
+    Yjs -> Tiptap [xlabel="binds to", style=dashed, color="#F57F17"];
+
+    // Invisible edge to help Yjs sit below/beside Tiptap without breaking cluster
+    Tiptap -> Yjs [style=invis];
+}

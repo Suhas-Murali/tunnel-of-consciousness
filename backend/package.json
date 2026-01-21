@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "main": "server.js",
   "scripts": {
-    "dev": "concurrently \"cross-env NODE_ENV=development nodemon server.js\" \"cd python && source venv/bin/activate && uvicorn main:app --reload --port 8000\"",
+    "dev-windows": "concurrently \"cross-env NODE_ENV=development nodemon server.js\" \"cd python && venv\\Scripts\\activate && uvicorn main:app --reload --port 8000\"",
+    "dev-linux": "concurrently \"cross-env NODE_ENV=development nodemon server.js\" \"cd python && source venv/bin/activate && uvicorn main:app --reload --port 8000\"",
     "test": "cross-env NODE_ENV=development vitest run",
     "start": "concurrently \"server.js\" \"cd python && source venv/bin/activate && uvicorn main:app --reload --port 8000\""
   },

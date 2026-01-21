@@ -24,7 +24,7 @@ EMOTION_MODEL = "j-hartmann/emotion-english-distilroberta-base"
 SENTIMENT_MODEL = "distilbert-base-uncased-finetuned-sst-2-english"
 
 device = 0 if torch.cuda.is_available() else -1
-print(f"🚀 Starting on {'GPU' if device == 0 else 'CPU'}...")
+print(f"Starting on {'GPU' if device == 0 else 'CPU'}...")
 
 models = {}
 
@@ -36,7 +36,7 @@ async def load_models():
     models["emotion"] = pipeline("text-classification", model=EMOTION_MODEL, return_all_scores=True, device=device)
     # Summarizer is heaviest, load last
     models["summarizer"] = pipeline("summarization", model=SUMMARIZATION_MODEL, device=device)
-    print("✅ Models Loaded")
+    print("Models Loaded")
 
 # --- DATA SCHEMAS ---
 
