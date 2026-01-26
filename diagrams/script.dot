@@ -1,0 +1,140 @@
+digraph YjsHocuspocus_Fixed {
+    // ------------------------------------
+    // GLOBAL SETTINGS
+    // ------------------------------------
+    rankdir=TB;
+    splines=ortho;
+    nodesep=0.5;               // Standard spacing
+    ranksep=1.0;
+    fontname="Helvetica";
+    fontsize=14;
+    compound=true;
+    label="Yjs Data Model: HTML-Table Layout (Fixed)";
+
+    // Default Styling
+    node [shape=plain, fontname="Helvetica"];
+    edge [fontname="Helvetica", fontsize=9, color="#555555"];
+
+    // ------------------------------------
+    // ZONE 1: THE YJS DOCUMENT
+    // ------------------------------------
+    subgraph cluster_ydoc {
+        label="Shared Document (Y.Doc)";
+        style=filled;
+        color="#FFF9C4";       
+        fontcolor="#FBC02D";
+        margin=20;
+
+        // ROOT NODE
+        YDoc [label=<
+            <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="10" BGCOLOR="#FFF59D">
+                <TR><TD PORT="root"><B>Y.Doc Instance</B></TD></TR>
+                <TR><TD ALIGN="LEFT">GUID: ...<BR/>ClientIDs: [123, 456]</TD></TR>
+            </TABLE>
+        >];
+
+        // SCRIPT CONTENT
+        ScriptStore [label=<
+            <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8" BGCOLOR="#FFFFFF">
+                <TR><TD COLSPAN="3" BGCOLOR="#FFECB3" PORT="head"><B>Script Content (Y.Array)</B></TD></TR>
+                <TR>
+                    <TD BGCOLOR="#ECEFF1"><B>Idx</B></TD>
+                    <TD BGCOLOR="#ECEFF1"><B>Type</B></TD>
+                    <TD BGCOLOR="#ECEFF1"><B>Content Snippet</B></TD>
+                </TR>
+                <TR>
+                    <TD>0</TD>
+                    <TD ALIGN="LEFT">Scene Heading</TD>
+                    <TD ALIGN="LEFT">INT. TUNNEL - DAY</TD>
+                </TR>
+                <TR>
+                    <TD>1</TD>
+                    <TD ALIGN="LEFT">Action</TD>
+                    <TD ALIGN="LEFT">The lights flicker...</TD>
+                </TR>
+                <TR>
+                    <TD>2</TD>
+                    <TD ALIGN="LEFT">Dialogue</TD>
+                    <TD ALIGN="LEFT">I can see it now.</TD>
+                </TR>
+            </TABLE>
+        >];
+
+        // AI METADATA
+        AIStore [label=<
+            <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8" BGCOLOR="#E1BEE7">
+                <TR><TD COLSPAN="2" BGCOLOR="#BA68C8" PORT="head"><B>AI Analysis (Y.Map)</B></TD></TR>
+                <TR>
+                    <TD BGCOLOR="#F3E5F5"><B>Key</B></TD>
+                    <TD BGCOLOR="#F3E5F5"><B>Value</B></TD>
+                </TR>
+                <TR>
+                    <TD ALIGN="LEFT">sentiment_0</TD>
+                    <TD ALIGN="LEFT">0.8 (Joy)</TD>
+                </TR>
+                <TR>
+                    <TD ALIGN="LEFT">ner_entities</TD>
+                    <TD ALIGN="LEFT">[Tunnel, Light]</TD>
+                </TR>
+            </TABLE>
+        >];
+
+        // CONFIG STORE
+        MetaStore [label=<
+            <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8" BGCOLOR="#B2EBF2">
+                <TR><TD COLSPAN="2" BGCOLOR="#4DD0E1" PORT="head"><B>Config Store (Y.Map)</B></TD></TR>
+                <TR>
+                    <TD BGCOLOR="#E0F7FA"><B>Key</B></TD>
+                    <TD BGCOLOR="#E0F7FA"><B>Value</B></TD>
+                </TR>
+                <TR>
+                    <TD ALIGN="LEFT">vis_mode</TD>
+                    <TD ALIGN="LEFT">'wireframe'</TD>
+                </TR>
+                <TR>
+                    <TD ALIGN="LEFT">script_fmt</TD>
+                    <TD ALIGN="LEFT">'standard_us'</TD>
+                </TR>
+            </TABLE>
+        >];
+
+        // ALIGNMENT FIX: Put rank=same INSIDE the cluster
+        { rank=same; ScriptStore; AIStore; MetaStore; }
+    }
+
+    // ------------------------------------
+    // ZONE 2: PERSISTENCE
+    // ------------------------------------
+    subgraph cluster_persistence {
+        label="Hocuspocus Server Layer";
+        style=filled;
+        color="#E8F5E9";       
+        fontcolor="#2E7D32";
+        margin=20;
+
+        HP_Server [label=<
+            <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="10" BGCOLOR="#C8E6C9">
+                <TR><TD PORT="ws"><B>Hocuspocus Server</B></TD></TR>
+                <TR><TD>WebSocket Handler</TD></TR>
+                <TR><TD PORT="db">Database Extension</TD></TR>
+            </TABLE>
+        >];
+
+        MongoDB [shape=cylinder, label="MongoDB\n(Binary Blob)", style=filled, fillcolor="#CFD8DC", color="#546E7A", height=1.5];
+    }
+
+    // ------------------------------------
+    // CONNECTIONS
+    // ------------------------------------
+
+    // Composition
+    YDoc:root -> ScriptStore:head [arrowhead=diamond, penwidth=1.2];
+    YDoc:root -> AIStore:head [arrowhead=diamond, penwidth=1.2];
+    YDoc:root -> MetaStore:head [arrowhead=diamond, penwidth=1.2];
+
+    // Data Sync
+    YDoc:s -> HP_Server:ws [xlabel="Binary Diff Sync", style=bold, minlen=2];
+
+    // DB Save
+    HP_Server:db -> MongoDB [xlabel="Debounced Save"];
+}

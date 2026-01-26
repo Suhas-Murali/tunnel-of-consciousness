@@ -1,0 +1,129 @@
+digraph GeometryPipeline {
+    // ------------------------------------
+    // GLOBAL SETTINGS
+    // ------------------------------------
+    rankdir=LR;
+    splines=ortho;
+    nodesep=0.5;
+    ranksep=1.0;
+    fontname="Helvetica";
+    fontsize=14;
+    compound=true;
+    label="3D Geometry Pipeline: Data to Visuals";
+
+    // Default Styling
+    node [shape=box, style="filled,rounded", fontname="Helvetica", penwidth=0, margin=0.2];
+    edge [fontname="Helvetica", fontsize=9, color="#555555"];
+
+    // ------------------------------------
+    // INPUT DATA (Narrative State)
+    // ------------------------------------
+    subgraph cluster_inputs {
+        label="Input: Narrative State";
+        style=dashed;
+        color="#B0BEC5";
+        fontcolor="#546E7A";
+        
+        Input_Time [label="Timeline (t)", fillcolor="#ECEFF1"];
+        Input_Emotion [label="Emotion Tag\n(e.g., Joy, Anger)", fillcolor="#ECEFF1"];
+        Input_Closeness [label="Character Closeness\n(0.0 - 1.0)", fillcolor="#ECEFF1"];
+        Input_Sig [label="Character Significance\n(Weight)", fillcolor="#ECEFF1"];
+    }
+
+    // ------------------------------------
+    // PROCESSING ENGINE
+    // ------------------------------------
+    subgraph cluster_engine {
+        label="Geometry Processing Engine";
+        style=filled;
+        color="#E3F2FD";       // Light Blue background
+        fontcolor="#0277BD";
+
+        // Step 1: Coordinate Mapping
+        subgraph cluster_coords {
+            label="Coordinate Mapping";
+            style=filled;
+            color="#FFFFFF";
+            
+            Z_Mapper [label="Z-Mapper\n(t → z)", fillcolor="#BBDEFB"];
+            XY_Mapper [label="Sector Selector\n(Emotion → x,y)", fillcolor="#BBDEFB"];
+        }
+
+        // Step 2: Trajectory Logic
+        subgraph cluster_path {
+            label="Trajectory Logic";
+            style=filled;
+            color="#FFFFFF";
+
+            Path_Gen [
+                label="Spline Generator\n(Interpolates Sectors)", 
+                fillcolor="#B3E5FC"
+            ];
+        }
+
+        // Step 3: Material Logic
+        subgraph cluster_material {
+            label="Material Properties";
+            style=filled;
+            color="#FFFFFF";
+
+            Shader_Calc [
+                label="Brightness Calculator\n(Sig → Opacity/Glow)", 
+                fillcolor="#E1BEE7" // Light Purple
+            ];
+        }
+    }
+
+    // ------------------------------------
+    // RENDERABLE OUTPUT
+    // ------------------------------------
+    subgraph cluster_output {
+        label="Three.js Objects";
+        style=filled;
+        color="#FFF3E0";       // Light Orange
+        fontcolor="#E65100";
+
+        Vertices [
+            label="{Vertices (BufferAttribute)|<x>x|<y>y|<z>z}", 
+            shape=record, 
+            fillcolor="#FFE0B2"
+        ];
+        
+        Material [
+            label="{ShaderUniforms|<c>Color|<op>Opacity}", 
+            shape=record, 
+            fillcolor="#FFCC80"
+        ];
+        
+        Mesh [label="Final Mesh", shape=component, fillcolor="#FFB74D"];
+    }
+
+    // ------------------------------------
+    // DATA FLOW CONNECTIONS
+    // ------------------------------------
+
+    // 1. Time to Z
+    Input_Time -> Z_Mapper [xlabel="Normalize"];
+    Z_Mapper -> Vertices:z;
+
+    // 2. Emotion to XY Sectors
+    Input_Emotion -> XY_Mapper [xlabel="Map to Quadrant"];
+    XY_Mapper -> Path_Gen [xlabel="Target Points"];
+    
+    // 3. Closeness to Path
+    Input_Closeness -> Path_Gen [xlabel="Convergence Factor"];
+    Path_Gen -> Vertices:x;
+    Path_Gen -> Vertices:y;
+
+    // 4. Significance to Brightness
+    Input_Sig -> Shader_Calc [xlabel="Weighting"];
+    Shader_Calc -> Material:op;
+
+    // 5. Assembly
+    Vertices -> Mesh [style=dashed];
+    Material -> Mesh [style=dashed];
+
+    // Invisible edges for alignment
+    edge [style=invis];
+    Input_Time -> Input_Emotion -> Input_Closeness -> Input_Sig;
+}
