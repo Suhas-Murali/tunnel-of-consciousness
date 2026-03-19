@@ -21,4 +21,4 @@
 
 1. Frontend: Inside `frontend` run `npm run dev`
 2. Backend: Inside `backend` run `npm run dev-{platform}`
-3. Inference: Inside `backend/python` activate the virtual env with `venv\Scprits\activate` then run `uvicorn main:app --reload --port 8000`
+3. Inference: Inside `backend/python` activate the virtual env with `venv\Scprits\activate` (for windows) `venv\bin\activate` (for linux). Then run `uvicorn main:app --reload --port 8000`
