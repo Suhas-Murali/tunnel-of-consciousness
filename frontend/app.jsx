@@ -100,9 +100,9 @@ const MainLayout = () => {
         <Outlet context={{ isLoading, isLoggedIn, user, checkAuth }} />
       </Content>
 
-      <Footer style={{ textAlign: "center", background: colorBgContainer }}>
+      {!location.pathname.startsWith("/script") && <Footer style={{ textAlign: "center", background: colorBgContainer }}>
         TOC © {new Date().getFullYear()}
-      </Footer>
+      </Footer>}
     </Layout>
   );
 };
