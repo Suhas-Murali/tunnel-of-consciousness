@@ -30,6 +30,7 @@ import {
 	VideoCameraOutlined,
 	ProjectOutlined,
 	CodeSandboxOutlined,
+	RadarChartOutlined,
 } from "@ant-design/icons";
 
 import * as Y from "yjs";
@@ -47,6 +48,7 @@ import {
 	Visualizer,
 	Timeline,
 	StoryOverview,
+	StoryAnalytics,
 } from "../components/editor";
 import { CenteredLoader } from "../components/loader";
 import { deleteScript, getScriptById } from "../../api";
@@ -90,6 +92,12 @@ const PANEL_REGISTRY = {
 		label: "Story Overview",
 		icon: <ProjectOutlined />,
 		component: StoryOverview,
+	},
+	story_analytics: {
+		id: "story_analytics",
+		label: "Story Analytics",
+		icon: <RadarChartOutlined />,
+		component: StoryAnalytics,
 	},
 };
 
