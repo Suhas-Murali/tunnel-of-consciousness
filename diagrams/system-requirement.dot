@@ -1,0 +1,92 @@
+digraph TOC_System_Requirements {
+	rankdir=LR;
+	splines=ortho;
+	nodesep=0.7;
+	ranksep=1.0;
+	fontname="Helvetica";
+	fontsize=12;
+	labelloc="t";
+	label="Tunnel of Consciousness - System Requirements Block Diagram";
+
+	node [shape=box, style="filled,rounded", fontname="Helvetica", fontsize=10, margin=0.18];
+	edge [fontname="Helvetica", fontsize=9, color="#555555"];
+
+	User [label="End User\n(Owner / Editor / Viewer)", fillcolor="#ECEFF1", color="#90A4AE"];
+
+	subgraph cluster_frontend {
+		label="Frontend Requirements (React + Vite)";
+		color="#BBDEFB";
+		style=filled;
+		fillcolor="#E3F2FD";
+
+		FE_Auth [label="Auth UI\nLogin/Signup/Profile", fillcolor="#FFFFFF", color="#64B5F6"];
+		FE_Dashboard [label="Script Dashboard\nSearch/Sort/Create/Open/Delete", fillcolor="#FFFFFF", color="#64B5F6"];
+		FE_Editor [label="Collaborative Script Editor\nDockable Panels + Layout Persistence", fillcolor="#FFFFFF", color="#64B5F6"];
+		FE_Vis [label="Timeline + 3D Visualizer\nCharacter/Scene/Story Insights", fillcolor="#FFFFFF", color="#64B5F6"];
+		FE_Settings [label="Script Settings\nShare/Permissions/Transfer", fillcolor="#FFFFFF", color="#64B5F6"];
+	}
+
+	subgraph cluster_backend {
+		label="Backend Requirements (Node.js + Express + Hocuspocus)";
+		color="#FFE0B2";
+		style=filled;
+		fillcolor="#FFF3E0";
+
+		BE_API [label="REST API\nUser + Script + Access Control", fillcolor="#FFFFFF", color="#FFB74D"];
+		BE_Auth [label="Security\nJWT + HttpOnly Cookie + CORS", fillcolor="#FFFFFF", color="#FFB74D"];
+		BE_RT [label="Realtime Collaboration\nYjs over WebSocket\nRole-based Write Access", fillcolor="#FFFFFF", color="#FFB74D"];
+		BE_Persist [label="Document Persistence Adapter\nLoad/Store Shared State", fillcolor="#FFFFFF", color="#FFB74D"];
+	}
+
+	subgraph cluster_ai {
+		label="Inference Requirements (Python FastAPI)";
+		color="#C8E6C9";
+		style=filled;
+		fillcolor="#E8F5E9";
+
+		AI_Parse [label="Parse Endpoint\nScene/Character Structure", fillcolor="#FFFFFF", color="#81C784"];
+		AI_Scene [label="Analyze Scene\nSummary + Metrics", fillcolor="#FFFFFF", color="#81C784"];
+		AI_Emotion [label="Analyze Emotion\nDominant Emotion + Breakdown", fillcolor="#FFFFFF", color="#81C784"];
+		AI_Network [label="Analyze Network\nCentrality/Betweenness", fillcolor="#FFFFFF", color="#81C784"];
+	}
+
+	subgraph cluster_data {
+		label="Data Requirements";
+		color="#CFD8DC";
+		style=filled;
+		fillcolor="#ECEFF1";
+
+		DB [shape=cylinder, label="MongoDB\nUsers + Scripts + Yjs State", fillcolor="#FFFFFF", color="#90A4AE"];
+		ENV [label="Configuration\nEnvironment Variables", fillcolor="#FFFFFF", color="#90A4AE"];
+	}
+
+	User -> FE_Auth [xlabel="Authenticate"];
+	User -> FE_Dashboard [xlabel="Manage Scripts"];
+	User -> FE_Editor [xlabel="Edit Collaboratively"];
+	User -> FE_Vis [xlabel="Inspect Insights"];
+	User -> FE_Settings [xlabel="Manage Access"];
+
+	FE_Auth -> BE_API [xlabel="HTTP"];
+	FE_Dashboard -> BE_API [xlabel="HTTP"];
+	FE_Settings -> BE_API [xlabel="HTTP"];
+	FE_Editor -> BE_RT [xlabel="WebSocket"];
+	FE_Editor -> BE_API [xlabel="HTTP Metadata"];
+	FE_Vis -> AI_Scene [xlabel="AI Requests"];
+	FE_Vis -> AI_Emotion [xlabel="AI Requests"];
+	FE_Vis -> AI_Network [xlabel="AI Requests"];
+
+	BE_API -> BE_Auth [xlabel="Protect Routes"];
+	BE_RT -> BE_Auth [xlabel="Authenticate Session"];
+	BE_API -> DB [xlabel="CRUD"];
+	BE_RT -> BE_Persist [xlabel="Sync State"];
+	BE_Persist -> DB [xlabel="Store/Fetch"];
+
+	BE_API -> AI_Parse [xlabel="Parse Script"];
+	BE_API -> AI_Scene [xlabel="Optional Orchestration"];
+	BE_API -> AI_Emotion [xlabel="Emotion Inference"];
+
+	ENV -> FE_Auth [style=dashed, xlabel="VITE_* URLs"];
+	ENV -> BE_API [style=dashed, xlabel="PORT, JWT, CORS"];
+	ENV -> AI_Parse [style=dashed, xlabel="Model Runtime"];
+	ENV -> DB [style=dashed, xlabel="MONGO_URI"];
+}
