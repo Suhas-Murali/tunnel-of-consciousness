@@ -3,6 +3,8 @@ import {
 	theme,
 	Card,
 	Tag,
+	Space,
+	Collapse,
 	Typography,
 	Row,
 	Col,
@@ -30,6 +32,26 @@ const formatTime = (seconds) => {
 	const m = Math.floor(seconds / 60);
 	const s = Math.floor(seconds % 60);
 	return `${m}:${s < 10 ? "0" : ""}${s}`;
+};
+
+const stringToColor = (str = "") => {
+	let hash = 0;
+	for (let i = 0; i < str.length; i += 1) {
+		hash = str.charCodeAt(i) + ((hash << 5) - hash);
+	}
+	const c = (hash & 0x00ffffff).toString(16).toUpperCase();
+	return `#${"00000".substring(0, 6 - c.length)}${c}`;
+};
+
+const parseLocationFromScene = (scene = {}) => {
+	const source = String(scene.heading || scene.name || "").trim();
+	if (!source) return "UNSPECIFIED";
+
+	const normalized = source
+		.toUpperCase()
+		.replace(/^(INT\.?|EXT\.?|INT\/EXT\.?|I\/E\.?)\s*/i, "");
+	const [locationChunk] = normalized.split(" - ");
+	return (locationChunk || "").trim() || "UNSPECIFIED";
 };
 
 const MAX_STRUCTURAL_BEAT_TAGS = 7;
@@ -213,6 +235,64 @@ export const StoryOverview = ({ provider }) => {
 		return CANONICAL_BEATS.map((beat) => tagsByBeat.get(beat))
 			.filter(Boolean)
 			.slice(0, MAX_STRUCTURAL_BEAT_TAGS);
+	}, [scenes]);
+
+	const locationAnalytics = useMemo(() => {
+		const validScenes = scenes.filter(
+			(scene) => String(scene.name || "").toUpperCase() !== "SCRIPT START",
+		);
+
+		const totalRuntime = validScenes.reduce(
+			(sum, scene) => sum + (Number(scene.durationSecs) || 10),
+			0,
+		);
+
+		const grouped = new Map();
+
+		validScenes.forEach((scene) => {
+			const location = parseLocationFromScene(scene);
+			const key = location;
+
+			if (!grouped.has(key)) {
+				grouped.set(key, {
+					key,
+					label: location,
+					totalDuration: 0,
+					sceneCount: 0,
+					characters: new Set(),
+					segments: [],
+				});
+			}
+
+			const row = grouped.get(key);
+			const duration = Number(scene.durationSecs) || 10;
+			row.totalDuration += duration;
+			row.sceneCount += 1;
+
+			const charList = Array.isArray(scene.characters)
+				? scene.characters
+				: Array.from(scene.characters || []);
+			charList.forEach((name) => row.characters.add(name));
+
+			row.segments.push({
+				sceneId: scene.id,
+				sceneName: scene.name || "Unnamed Scene",
+				startSec: scene.startTime || 0,
+				endSec: scene.endTime || (scene.startTime || 0) + duration,
+				duration,
+			});
+		});
+
+		const locations = Array.from(grouped.values())
+			.map((item) => ({
+				...item,
+				characters: Array.from(item.characters).sort((a, b) =>
+					a.localeCompare(b),
+				),
+			}))
+			.sort((a, b) => b.totalDuration - a.totalDuration);
+
+		return { totalRuntime, locations };
 	}, [scenes]);
 
 	// Calculate percentage for the global playhead
@@ -533,6 +613,159 @@ export const StoryOverview = ({ provider }) => {
 				variant="borderless"
 			>
 				<CharacterThreads />
+			</Card>
+
+			{/* 5. LOCATION USAGE */}
+			<Card
+				size="small"
+				title="Location Usage"
+				style={{ marginBottom: 24, background: token.colorFillQuaternary }}
+				variant="borderless"
+			>
+				<Space
+					style={{
+						width: "100%",
+						justifyContent: "space-between",
+						marginBottom: 10,
+					}}
+				>
+					<Text type="secondary">Locations</Text>
+					<Text type="secondary" style={{ fontSize: 12 }}>
+						Total Runtime: {formatTime(locationAnalytics.totalRuntime)}
+					</Text>
+				</Space>
+
+				{!locationAnalytics.locations.length ? (
+					<Empty
+						image={Empty.PRESENTED_IMAGE_SIMPLE}
+						description="No Location Data"
+					/>
+				) : (
+					<Collapse
+						size="small"
+						items={locationAnalytics.locations.map((location) => ({
+							key: location.key,
+							label: (
+								<div
+									style={{
+										display: "flex",
+										alignItems: "center",
+										justifyContent: "space-between",
+										width: "100%",
+										gap: 8,
+										paddingRight: 8,
+									}}
+								>
+									<Space size={8}>
+										<div
+											style={{
+												width: 8,
+												height: 8,
+												borderRadius: "50%",
+												background: stringToColor(location.label),
+											}}
+										/>
+										<Text>{location.label}</Text>
+									</Space>
+									<Space size={6}>
+										<Tag>{formatTime(location.totalDuration)}</Tag>
+										<Tag color="blue">{location.sceneCount} scenes</Tag>
+										<Tag color="purple">{location.characters.length} chars</Tag>
+									</Space>
+								</div>
+							),
+							children: (
+								<Space direction="vertical" size={8} style={{ width: "100%" }}>
+									<div>
+										<Text type="secondary" style={{ fontSize: 12 }}>
+											Usage Timeline
+										</Text>
+										<div
+											style={{
+												position: "relative",
+												marginTop: 6,
+												height: 20,
+												borderRadius: 6,
+												background: token.colorBgContainer,
+												overflow: "hidden",
+												border: `1px solid ${token.colorBorderSecondary}`,
+											}}
+										>
+											{location.segments.map((segment) => {
+												const total = Math.max(
+													locationAnalytics.totalRuntime,
+													1,
+												);
+												const left = (segment.startSec / total) * 100;
+												const width = Math.max(
+													(segment.duration / total) * 100,
+													1,
+												);
+
+												return (
+													<Tooltip
+														key={`${location.key}-${segment.sceneId}-${segment.startSec}`}
+														title={`${segment.sceneName} • ${formatTime(segment.startSec)} - ${formatTime(segment.endSec)}`}
+													>
+														<div
+															onClick={() => setCurrentTime(segment.startSec)}
+															style={{
+																position: "absolute",
+																left: `${left}%`,
+																width: `${width}%`,
+																top: 2,
+																bottom: 2,
+																borderRadius: 4,
+																background: stringToColor(location.label),
+																cursor: "pointer",
+																opacity: 0.95,
+															}}
+														/>
+													</Tooltip>
+												);
+											})}
+										</div>
+										<div
+											style={{
+												display: "flex",
+												justifyContent: "space-between",
+												marginTop: 3,
+											}}
+										>
+											<Text type="secondary" style={{ fontSize: 11 }}>
+												0:00
+											</Text>
+											<Text type="secondary" style={{ fontSize: 11 }}>
+												{formatTime(locationAnalytics.totalRuntime)}
+											</Text>
+										</div>
+									</div>
+
+									<div>
+										<Text type="secondary" style={{ fontSize: 12 }}>
+											Characters ({location.characters.length})
+										</Text>
+										<div style={{ marginTop: 6 }}>
+											{location.characters.length ? (
+												<Space wrap>
+													{location.characters.map((character) => (
+														<Tag key={`${location.key}-${character}`}>
+															{character}
+														</Tag>
+													))}
+												</Space>
+											) : (
+												<Text type="secondary" style={{ fontSize: 12 }}>
+													No characters listed.
+												</Text>
+											)}
+										</div>
+									</div>
+								</Space>
+							),
+						}))}
+					/>
+				)}
 			</Card>
 		</div>
 	);

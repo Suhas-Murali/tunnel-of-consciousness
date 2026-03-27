@@ -1077,8 +1077,8 @@ export const ScriptEditor = ({ onSiderCollapse, provider }) => {
 						synopsis: aiData.synopsis || s.synopsis,
 						metrics: {
 							...s.metrics,
-							pacing: aiData.metrics?.linguisticDensity || s.metrics.pacing,
-							sentiment: aiData.metrics?.sentiment || s.metrics.sentiment,
+							pacing: aiData.metrics?.pacing ?? s.metrics.pacing,
+							sentiment: aiData.metrics?.sentiment ?? s.metrics.sentiment,
 						},
 					};
 				});
