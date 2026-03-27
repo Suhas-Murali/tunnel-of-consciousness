@@ -109,7 +109,7 @@ const SCRIPT_BLOCK_TYPES = new Set([
 	"transition",
 ]);
 
-const DIALOGUE_DURATION_SECS = 6;
+export const DIALOGUE_DURATION_SECS = 6;
 const ACTION_DURATION_SECS = 4;
 
 const IMPORT_SCRIPT_TYPE_ALIASES = {
