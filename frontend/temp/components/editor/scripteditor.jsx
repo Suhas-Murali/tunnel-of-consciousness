@@ -109,6 +109,9 @@ const SCRIPT_BLOCK_TYPES = new Set([
 	"transition",
 ]);
 
+const DIALOGUE_DURATION_SECS = 6;
+const ACTION_DURATION_SECS = 4;
+
 const IMPORT_SCRIPT_TYPE_ALIASES = {
 	parenthesis: "parenthetical",
 };
@@ -282,7 +285,7 @@ const analyzeScriptLocal = (doc) => {
 		} else if (type === "dialogue" && currentCharacter) {
 			if (text) {
 				currentScene.dialogueLines++;
-				currentScene.durationSecs += 3;
+				currentScene.durationSecs += DIALOGUE_DURATION_SECS;
 
 				currentScene.charLineCounts[currentCharacter] =
 					(currentScene.charLineCounts[currentCharacter] || 0) + 1;
@@ -306,7 +309,7 @@ const analyzeScriptLocal = (doc) => {
 		} else if (type === "action") {
 			if (text) {
 				currentScene.actionLines++;
-				currentScene.durationSecs += 2;
+				currentScene.durationSecs += ACTION_DURATION_SECS;
 				if (!currentScene.synopsis) currentScene.synopsis = text;
 				currentScene.lines.push({ type: "action", text });
 			}
@@ -885,8 +888,8 @@ export const ScriptEditor = ({ onSiderCollapse, provider }) => {
 				const type = node.attrs.scriptType || "action";
 				let duration = 0;
 				if (type === "scene") duration = 0;
-				else if (type === "dialogue") duration = 3;
-				else if (type === "action") duration = 2;
+				else if (type === "dialogue") duration = DIALOGUE_DURATION_SECS;
+				else if (type === "action") duration = ACTION_DURATION_SECS;
 
 				if (node.textContent.trim().length > 0 || type === "scene") {
 					if (accumulatedTime + duration >= targetTime) {
