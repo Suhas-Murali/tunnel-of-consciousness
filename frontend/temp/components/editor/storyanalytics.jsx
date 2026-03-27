@@ -1,17 +1,13 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import {
-	Alert,
 	Card,
 	Col,
 	Empty,
 	Progress,
 	Row,
-	Segmented,
 	Select,
 	Space,
 	Statistic,
-	Switch,
-	Tabs,
 	Tag,
 	Typography,
 	theme,
@@ -20,7 +16,6 @@ import {
 	CompassOutlined,
 	DotChartOutlined,
 	FieldTimeOutlined,
-	FireOutlined,
 	GlobalOutlined,
 	LineChartOutlined,
 	RadarChartOutlined,
@@ -32,22 +27,15 @@ import {
 	Bar,
 	BarChart,
 	CartesianGrid,
-	Cell,
 	ComposedChart,
 	Legend,
 	Line,
-	Pie,
-	PieChart,
 	ResponsiveContainer,
-	Scatter,
-	ScatterChart,
 	Tooltip,
 	XAxis,
 	YAxis,
-	ZAxis,
 } from "recharts";
 import { ScriptStateContext } from "../contexts";
-import { emotionHierarchy } from "../../../visualizer/emotionHierarchy";
 
 const { Text, Title } = Typography;
 
@@ -84,22 +72,15 @@ const parseSceneMeta = (sceneName = "") => {
 	};
 };
 
-const getEmotionColorMap = () => {
-	const map = {};
-	emotionHierarchy.forEach((item) => {
-		map[item.core.toLowerCase()] = item.color;
-		item.secondary.forEach((secondary) => {
-			map[secondary.name.toLowerCase()] = item.color;
-			secondary.tertiary.forEach((tertiary) => {
-				map[tertiary.toLowerCase()] = item.color;
-			});
-		});
-	});
-	return map;
-};
-
 const chartCardStyle = (token) => ({
-	height: 330,
+	minHeight: 360,
+	overflow: "hidden",
+	background: `linear-gradient(160deg, ${token.colorBgContainer} 0%, ${token.colorFillQuaternary} 100%)`,
+	border: `1px solid ${token.colorBorderSecondary}`,
+	borderRadius: token.borderRadiusLG,
+});
+
+const kpiCardStyle = (token) => ({
 	background: `linear-gradient(160deg, ${token.colorBgContainer} 0%, ${token.colorFillQuaternary} 100%)`,
 	border: `1px solid ${token.colorBorderSecondary}`,
 	borderRadius: token.borderRadiusLG,
@@ -124,13 +105,8 @@ export const StoryAnalytics = ({ provider }) => {
 	});
 	const [hasTranslationSnapshot, setHasTranslationSnapshot] = useState(false);
 
-	const [environmentFilter, setEnvironmentFilter] = useState("all");
-	const [roleFilter, setRoleFilter] = useState("all");
-	const [riskOnly, setRiskOnly] = useState(false);
 	const [selectedSceneId, setSelectedSceneId] = useState(null);
 	const [selectedCharacterId, setSelectedCharacterId] = useState(null);
-
-	const emotionColors = useMemo(() => getEmotionColorMap(), []);
 
 	useEffect(() => {
 		if (!provider) return;
@@ -200,29 +176,21 @@ export const StoryAnalytics = ({ provider }) => {
 		});
 	}, [characters]);
 
-	const filteredScenes = useMemo(() => {
-		if (environmentFilter === "all") return scenes;
-		return scenes.filter((scene) => {
-			const meta = parseSceneMeta(scene.name);
-			return meta.environment === environmentFilter;
-		});
-	}, [environmentFilter, scenes]);
-
 	const sceneAnalytics = useMemo(() => {
-		if (!filteredScenes.length) return [];
+		if (!scenes.length) return [];
 
 		const maxDuration = Math.max(
 			1,
-			...filteredScenes.map((scene) => Number(scene.durationSecs) || 0),
+			...scenes.map((scene) => Number(scene.durationSecs) || 0),
 		);
 		const maxCast = Math.max(
 			1,
-			...filteredScenes.map((scene) => (scene.characters || []).length || 0),
+			...scenes.map((scene) => (scene.characters || []).length || 0),
 		);
 
 		let cumulativeDuration = 0;
 
-		return filteredScenes.map((scene, index) => {
+		return scenes.map((scene, index) => {
 			const duration = Number(scene.durationSecs) || 0;
 			const castCount = (scene.characters || []).length || 0;
 			const actionRatio = Number(scene.metrics?.actionRatio) || 0;
@@ -244,17 +212,6 @@ export const StoryAnalytics = ({ provider }) => {
 				100,
 			);
 
-			const riskScore = clamp(
-				Math.round(
-					complexity * 0.6 +
-						Math.max(0, -sentiment) * 22 +
-						Math.abs(sentiment) * 10 +
-						(castCount > 5 ? 8 : 0),
-				),
-				0,
-				100,
-			);
-
 			const start = cumulativeDuration;
 			cumulativeDuration += duration;
 
@@ -269,7 +226,6 @@ export const StoryAnalytics = ({ provider }) => {
 				pacing,
 				sentiment,
 				complexity,
-				riskScore,
 				dialogueLines,
 				location: meta.location,
 				environment: meta.environment,
@@ -281,21 +237,10 @@ export const StoryAnalytics = ({ provider }) => {
 				color: scene.color || token.colorPrimary,
 			};
 		});
-	}, [filteredScenes, token.colorPrimary]);
-
-	const filteredSceneAnalytics = useMemo(() => {
-		if (!riskOnly) return sceneAnalytics;
-		return sceneAnalytics.filter((scene) => scene.riskScore >= 65);
-	}, [riskOnly, sceneAnalytics]);
+	}, [scenes, token.colorPrimary]);
 
 	const characterAnalytics = useMemo(() => {
-		const roleFilterValue = roleFilter.toLowerCase();
-		const roleFiltered = characters.filter((character) => {
-			if (roleFilterValue === "all") return true;
-			return (character.role || "minor").toLowerCase() === roleFilterValue;
-		});
-
-		return roleFiltered
+		return characters
 			.map((character) => {
 				const degree = Number(character.metrics?.degreeCentrality) || 0;
 				const betweenness = Number(character.metrics?.betweenness) || 0;
@@ -326,7 +271,7 @@ export const StoryAnalytics = ({ provider }) => {
 				};
 			})
 			.sort((a, b) => b.influence - a.influence);
-	}, [characters, roleFilter, token.colorPrimary]);
+	}, [characters, token.colorPrimary]);
 
 	const selectedCharacterTimeline = useMemo(() => {
 		if (!selectedCharacterId) return [];
@@ -350,7 +295,7 @@ export const StoryAnalytics = ({ provider }) => {
 
 	const locationDataset = useMemo(() => {
 		const bucket = new Map();
-		filteredSceneAnalytics.forEach((scene) => {
+		sceneAnalytics.forEach((scene) => {
 			const existing = bucket.get(scene.location) || {
 				name: scene.location,
 				runtime: 0,
@@ -372,81 +317,68 @@ export const StoryAnalytics = ({ provider }) => {
 			}))
 			.sort((a, b) => b.runtime - a.runtime)
 			.slice(0, 8);
-	}, [filteredSceneAnalytics]);
-
-	const emotionalDistribution = useMemo(() => {
-		const bucket = new Map();
-		characterAnalytics.forEach((character) => {
-			const key = character.emotion || "neutral";
-			bucket.set(key, (bucket.get(key) || 0) + 1);
-		});
-		return Array.from(bucket.entries()).map(([name, value]) => ({
-			name,
-			value,
-			color: emotionColors[name] || token.colorPrimary,
-		}));
-	}, [characterAnalytics, emotionColors, token.colorPrimary]);
-
-	const structuralBeatDataset = useMemo(() => {
-		const beats = {
-			"Inciting Incident": 0,
-			Midpoint: 0,
-			Climax: 0,
-			None: 0,
-		};
-		sceneAnalytics.forEach((scene) => {
-			beats[scene.structuralBeat] = (beats[scene.structuralBeat] || 0) + 1;
-		});
-		return Object.entries(beats).map(([name, value]) => ({ name, value }));
 	}, [sceneAnalytics]);
 
 	const kpis = useMemo(() => {
-		const totalRuntime = filteredSceneAnalytics.reduce(
+		const totalRuntime = sceneAnalytics.reduce(
 			(acc, scene) => acc + scene.duration,
 			0,
 		);
-		const highRiskScenes = filteredSceneAnalytics.filter(
-			(scene) => scene.riskScore >= 65,
-		).length;
 		const uniqueLocations = new Set(
-			filteredSceneAnalytics.map((scene) => scene.location),
+			sceneAnalytics.map((scene) => scene.location),
 		).size;
 		const avgComplexity = Math.round(
-			filteredSceneAnalytics.reduce((acc, scene) => acc + scene.complexity, 0) /
-				Math.max(1, filteredSceneAnalytics.length),
+			sceneAnalytics.reduce((acc, scene) => acc + scene.complexity, 0) /
+				Math.max(1, sceneAnalytics.length),
 		);
 		return {
 			totalRuntime,
-			highRiskScenes,
+			totalScenes: sceneAnalytics.length,
 			uniqueLocations,
 			avgComplexity,
 		};
-	}, [filteredSceneAnalytics]);
+	}, [sceneAnalytics]);
 
 	const activeScene = useMemo(
-		() => filteredSceneAnalytics.find((scene) => scene.id === selectedSceneId),
-		[filteredSceneAnalytics, selectedSceneId],
+		() => sceneAnalytics.find((scene) => scene.id === selectedSceneId),
+		[sceneAnalytics, selectedSceneId],
 	);
 
-	const networkReady = useMemo(
+	const activeCharacter = useMemo(
 		() =>
-			characterAnalytics.some(
-				(character) => character.degree > 0 || character.betweenness > 0,
+			characterAnalytics.find(
+				(character) => character.id === selectedCharacterId,
 			),
-		[characterAnalytics],
+		[characterAnalytics, selectedCharacterId],
 	);
 
-	const sentimentReady = useMemo(
-		() => sceneAnalytics.some((scene) => Math.abs(scene.sentiment) > 0.001),
-		[sceneAnalytics],
+	const chartTick = useMemo(
+		() => ({ fill: token.colorTextSecondary, fontSize: 12 }),
+		[token.colorTextSecondary],
 	);
 
-	const topRiskList = useMemo(
-		() =>
-			[...filteredSceneAnalytics]
-				.sort((a, b) => b.riskScore - a.riskScore)
-				.slice(0, 5),
-		[filteredSceneAnalytics],
+	const legendProps = useMemo(
+		() => ({
+			wrapperStyle: { color: token.colorTextSecondary, fontSize: 12 },
+			formatter: (value) => (
+				<span style={{ color: token.colorTextSecondary }}>{value}</span>
+			),
+		}),
+		[token.colorTextSecondary],
+	);
+
+	const tooltipProps = useMemo(
+		() => ({
+			contentStyle: {
+				...tooltipStyle,
+				background: token.colorBgElevated,
+				color: token.colorText,
+				border: `1px solid ${token.colorBorderSecondary}`,
+			},
+			labelStyle: { color: token.colorText },
+			itemStyle: { color: token.colorText },
+		}),
+		[token.colorBgElevated, token.colorBorderSecondary, token.colorText],
 	);
 
 	if (!provider) return <Empty description="Story analytics unavailable" />;
@@ -464,6 +396,7 @@ export const StoryAnalytics = ({ provider }) => {
 			style={{
 				height: "100%",
 				overflow: "auto",
+				overflowX: "hidden",
 				padding: 16,
 				background: `radial-gradient(circle at top right, ${token.colorFillSecondary} 0%, ${token.colorBgContainer} 42%, ${token.colorBgLayout} 100%)`,
 			}}
@@ -478,9 +411,6 @@ export const StoryAnalytics = ({ provider }) => {
 						<Title level={4} style={{ margin: 0 }}>
 							Story Analytics Deck
 						</Title>
-						<Text type="secondary">
-							Production-first story diagnostics with live script intelligence.
-						</Text>
 					</div>
 					<Space wrap>
 						<Tag color="blue" icon={<GlobalOutlined />}>
@@ -496,82 +426,9 @@ export const StoryAnalytics = ({ provider }) => {
 				</Space>
 			</div>
 
-			{(!networkReady || !sentimentReady) && (
-				<Alert
-					showIcon
-					type="info"
-					message="Some advanced metrics need AI analysis"
-					description="Influence and sentiment charts get richer after running script analysis. Baseline parser metrics are shown now."
-					style={{ marginBottom: 14 }}
-				/>
-			)}
-
-			<Card
-				style={{
-					marginBottom: 14,
-					border: `1px solid ${token.colorBorderSecondary}`,
-					background: `linear-gradient(120deg, ${token.colorBgElevated} 0%, ${token.colorFillTertiary} 100%)`,
-				}}
-			>
-				<Row gutter={[12, 12]} align="middle">
-					<Col xs={24} md={7}>
-						<Space direction="vertical" style={{ width: "100%" }}>
-							<Text type="secondary">Environment</Text>
-							<Segmented
-								block
-								value={environmentFilter}
-								onChange={setEnvironmentFilter}
-								options={[
-									{ label: "All", value: "all" },
-									{ label: "INT", value: "INT" },
-									{ label: "EXT", value: "EXT" },
-									{ label: "Mixed", value: "MIXED" },
-								]}
-							/>
-						</Space>
-					</Col>
-					<Col xs={24} md={6}>
-						<Space direction="vertical" style={{ width: "100%" }}>
-							<Text type="secondary">Cast Role Scope</Text>
-							<Segmented
-								block
-								value={roleFilter}
-								onChange={setRoleFilter}
-								options={[
-									{ label: "All", value: "all" },
-									{ label: "Major", value: "major" },
-									{ label: "Minor", value: "minor" },
-								]}
-							/>
-						</Space>
-					</Col>
-					<Col xs={24} md={6}>
-						<Space direction="vertical" style={{ width: "100%" }}>
-							<Text type="secondary">Focus Scene</Text>
-							<Select
-								allowClear
-								placeholder="Select scene"
-								value={selectedSceneId}
-								onChange={setSelectedSceneId}
-								options={filteredSceneAnalytics.map((scene) => ({
-									value: scene.id,
-									label: `${scene.shortName} ${scene.name}`,
-								}))}
-							/>
-						</Space>
-					</Col>
-					<Col xs={24} md={5}>
-						<Space direction="vertical" style={{ width: "100%" }}>
-							<Text type="secondary">High-Risk Only</Text>
-							<Switch checked={riskOnly} onChange={setRiskOnly} />
-						</Space>
-					</Col>
-				</Row>
-			</Card>
-
 			<Row gutter={[12, 12]} style={{ marginBottom: 14 }}>
 				<Col xs={12} md={6}>
-					<Card bordered={false} style={chartCardStyle(token)}>
+					<Card bordered={false} style={kpiCardStyle(token)}>
 						<Statistic
 							title="Est. Runtime"
 							value={formatDuration(kpis.totalRuntime)}
@@ -593,21 +450,17 @@ export const StoryAnalytics = ({ provider }) => {
 					</Card>
 				</Col>
 				<Col xs={12} md={6}>
-					<Card bordered={false} style={chartCardStyle(token)}>
+					<Card bordered={false} style={kpiCardStyle(token)}>
 						<Statistic
-							title="High-Risk Scenes"
-							value={kpis.highRiskScenes}
-							prefix={<FireOutlined />}
-							valueStyle={{ color: token.colorError }}
+							title="Scenes"
+							value={kpis.totalScenes}
+							prefix={<DotChartOutlined />}
 						/>
-						<Text type="secondary">
-							Scenes above risk score 65 based on complexity and sentiment
-							pressure.
-						</Text>
+						<Text type="secondary">Total analyzed scenes in the script.</Text>
 					</Card>
 				</Col>
 				<Col xs={12} md={6}>
-					<Card bordered={false} style={chartCardStyle(token)}>
+					<Card bordered={false} style={kpiCardStyle(token)}>
 						<Statistic
 							title="Locations"
 							value={kpis.uniqueLocations}
@@ -619,7 +472,7 @@ export const StoryAnalytics = ({ provider }) => {
 					</Card>
 				</Col>
 				<Col xs={12} md={6}>
-					<Card bordered={false} style={chartCardStyle(token)}>
+					<Card bordered={false} style={kpiCardStyle(token)}>
 						<Statistic
 							title="Avg Complexity"
 							value={kpis.avgComplexity}
@@ -636,525 +489,400 @@ export const StoryAnalytics = ({ provider }) => {
 				</Col>
 			</Row>
 
-			<Tabs
-				defaultActiveKey="producer"
-				items={[
-					{
-						key: "producer",
-						label: (
-							<Space>
-								<UsergroupAddOutlined />
-								Producer and Director
-							</Space>
-						),
-						children: (
-							<Row gutter={[12, 12]}>
-								<Col xs={24} xl={15}>
-									<Card
-										title="Scene Complexity and Shoot Pressure"
-										style={chartCardStyle(token)}
-									>
-										<ResponsiveContainer width="100%" height={255}>
-											<ComposedChart
-												data={filteredSceneAnalytics}
-												onClick={(payload) => {
-													if (payload?.activePayload?.[0]?.payload?.id) {
-														setSelectedSceneId(
-															payload.activePayload[0].payload.id,
-														);
-													}
-												}}
-											>
-												<CartesianGrid
-													stroke={token.colorBorderSecondary}
-													strokeDasharray="3 3"
-												/>
-												<XAxis
-													dataKey="shortName"
-													stroke={token.colorTextSecondary}
-												/>
-												<YAxis
-													yAxisId="left"
-													stroke={token.colorTextSecondary}
-													domain={[0, 100]}
-												/>
-												<YAxis
-													yAxisId="right"
-													orientation="right"
-													stroke={token.colorTextSecondary}
-												/>
-												<Tooltip
-													contentStyle={{
-														...tooltipStyle,
-														background: token.colorBgElevated,
-														color: token.colorText,
-													}}
-												/>
-												<Legend />
-												<Bar
-													yAxisId="left"
-													dataKey="complexity"
-													name="Complexity"
-													fill={token.colorPrimary}
-													radius={[6, 6, 0, 0]}
-												/>
-												<Bar
-													yAxisId="left"
-													dataKey="riskScore"
-													name="Risk"
-													fill={token.colorError}
-													radius={[6, 6, 0, 0]}
-												/>
-												<Line
-													yAxisId="right"
-													type="monotone"
-													dataKey="duration"
-													name="Duration (s)"
-													stroke={token.colorWarning}
-													strokeWidth={2}
-													dot={{ r: 2 }}
-												/>
-											</ComposedChart>
-										</ResponsiveContainer>
-									</Card>
-								</Col>
-								<Col xs={24} xl={9}>
-									<Card
-										title="Top Schedule Risks"
-										style={chartCardStyle(token)}
-									>
-										<Space
-											direction="vertical"
-											style={{ width: "100%" }}
-											size={12}
-										>
-											{topRiskList.map((scene) => (
-												<div
-													key={scene.id}
-													onClick={() => setSelectedSceneId(scene.id)}
-													style={{
-														cursor: "pointer",
-														padding: "10px 12px",
-														borderRadius: 10,
-														background:
-															selectedSceneId === scene.id
-																? token.colorPrimaryBg
-																: token.colorFillQuaternary,
-														border: `1px solid ${token.colorBorderSecondary}`,
-													}}
-												>
-													<Space
-														style={{
-															width: "100%",
-															justifyContent: "space-between",
-														}}
-													>
-														<div>
-															<Text strong>{scene.shortName}</Text>
-															<div style={{ maxWidth: 220 }}>
-																<Text type="secondary" ellipsis>
-																	{scene.name}
-																</Text>
-															</div>
-														</div>
-														<Tag color="red">Risk {scene.riskScore}</Tag>
-													</Space>
-												</div>
-											))}
-											{!topRiskList.length && (
-												<Empty
-													image={Empty.PRESENTED_IMAGE_SIMPLE}
-													description="No risky scenes under current filters"
-												/>
-											)}
-										</Space>
-									</Card>
-								</Col>
+			<Space
+				size={8}
+				align="center"
+				style={{ width: "100%", marginBottom: 10 }}
+			>
+				<UsergroupAddOutlined style={{ color: token.colorPrimary }} />
+				<Title level={5} style={{ margin: 0 }}>
+					Producer and Director
+				</Title>
+			</Space>
 
-								<Col xs={24} xl={12}>
-									<Card
-										title="Location Runtime Allocation"
-										style={chartCardStyle(token)}
-									>
-										<ResponsiveContainer width="100%" height={250}>
-											<PieChart>
-												<Pie
-													data={locationDataset}
-													dataKey="runtime"
-													nameKey="name"
-													innerRadius={55}
-													outerRadius={95}
-													paddingAngle={2}
-												>
-													{locationDataset.map((item, index) => (
-														<Cell
-															key={`${item.name}-${index}`}
-															fill={
-																index % 2 ? token.colorInfo : token.colorPrimary
-															}
-														/>
-													))}
-												</Pie>
-												<Tooltip
-													formatter={(value) =>
-														`${formatDuration(value)} runtime`
-													}
-													contentStyle={{
-														...tooltipStyle,
-														background: token.colorBgElevated,
-														color: token.colorText,
-													}}
-												/>
-												<Legend />
-											</PieChart>
-										</ResponsiveContainer>
-									</Card>
-								</Col>
+			<Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+				<Col xs={24}>
+					<Card
+						title="Scene Complexity and Duration"
+						style={chartCardStyle(token)}
+					>
+						<ResponsiveContainer width="100%" height={280}>
+							<ComposedChart
+								data={sceneAnalytics}
+								margin={{ top: 10, right: 18, left: 4, bottom: 18 }}
+								onClick={(payload) => {
+									if (payload?.activePayload?.[0]?.payload?.id) {
+										setSelectedSceneId(payload.activePayload[0].payload.id);
+									}
+								}}
+							>
+								<CartesianGrid
+									stroke={token.colorBorderSecondary}
+									strokeDasharray="3 3"
+								/>
+								<XAxis
+									dataKey="shortName"
+									stroke={token.colorTextSecondary}
+									tick={chartTick}
+								/>
+								<YAxis
+									yAxisId="left"
+									stroke={token.colorTextSecondary}
+									tick={chartTick}
+									domain={[0, 100]}
+								/>
+								<YAxis
+									yAxisId="right"
+									orientation="right"
+									stroke={token.colorTextSecondary}
+									tick={chartTick}
+								/>
+								<Tooltip {...tooltipProps} />
+								<Legend {...legendProps} />
+								<Bar
+									yAxisId="left"
+									dataKey="complexity"
+									name="Complexity"
+									fill={token.colorPrimary}
+									radius={[6, 6, 0, 0]}
+								/>
+								<Line
+									yAxisId="right"
+									type="monotone"
+									dataKey="duration"
+									name="Duration (s)"
+									stroke={token.colorWarning}
+									strokeWidth={2}
+									dot={{ r: 2 }}
+								/>
+							</ComposedChart>
+						</ResponsiveContainer>
+					</Card>
+				</Col>
 
-								<Col xs={24} xl={12}>
-									<Card
-										title="Cast Influence and Production Load"
-										style={chartCardStyle(token)}
-									>
-										<ResponsiveContainer width="100%" height={250}>
-											<BarChart
-												data={characterAnalytics.slice(0, 10)}
-												onClick={(payload) => {
-													if (payload?.activePayload?.[0]?.payload?.id) {
-														setSelectedCharacterId(
-															payload.activePayload[0].payload.id,
-														);
-													}
-												}}
-											>
-												<CartesianGrid
-													stroke={token.colorBorderSecondary}
-													strokeDasharray="3 3"
-												/>
-												<XAxis
-													dataKey="name"
-													stroke={token.colorTextSecondary}
-													interval={0}
-													angle={-20}
-													textAnchor="end"
-													height={70}
-												/>
-												<YAxis
-													yAxisId="left"
-													stroke={token.colorTextSecondary}
-													domain={[0, 100]}
-												/>
-												<YAxis
-													yAxisId="right"
-													orientation="right"
-													stroke={token.colorTextSecondary}
-												/>
-												<Tooltip
-													contentStyle={{
-														...tooltipStyle,
-														background: token.colorBgElevated,
-														color: token.colorText,
-													}}
-												/>
-												<Legend />
-												<Bar
-													yAxisId="left"
-													dataKey="influence"
-													fill={token.colorSuccess}
-													name="Influence"
-													radius={[6, 6, 0, 0]}
-												/>
-												<Line
-													yAxisId="right"
-													dataKey="productionLoad"
-													stroke={token.colorWarning}
-													strokeWidth={2}
-													name="Production Load"
-												/>
-											</BarChart>
-										</ResponsiveContainer>
-									</Card>
-								</Col>
+				<Col xs={24}>
+					<Card
+						title="Location Runtime Allocation"
+						style={{ ...chartCardStyle(token), minHeight: 500 }}
+					>
+						<ResponsiveContainer width="100%" height={420}>
+							<BarChart
+								data={locationDataset}
+								layout="vertical"
+								margin={{ top: 10, right: 24, left: 80, bottom: 8 }}
+							>
+								<CartesianGrid
+									stroke={token.colorBorderSecondary}
+									strokeDasharray="3 3"
+								/>
+								<XAxis
+									type="number"
+									stroke={token.colorTextSecondary}
+									tick={chartTick}
+								/>
+								<YAxis
+									type="category"
+									dataKey="name"
+									stroke={token.colorTextSecondary}
+									tick={chartTick}
+									width={220}
+								/>
+								<Tooltip
+									{...tooltipProps}
+									formatter={(value) => `${formatDuration(value)} runtime`}
+								/>
+								<Legend {...legendProps} />
+								<Bar
+									dataKey="runtime"
+									name="Runtime"
+									fill={token.colorInfo}
+									radius={[0, 6, 6, 0]}
+								/>
+								<Line
+									dataKey="avgComplexity"
+									name="Avg Complexity"
+									stroke={token.colorWarning}
+									strokeWidth={2}
+								/>
+							</BarChart>
+						</ResponsiveContainer>
+					</Card>
+				</Col>
 
-								<Col xs={24}>
-									<Card
-										title="Risk Matrix (Complexity vs Sentiment vs Duration)"
-										style={chartCardStyle(token)}
-									>
-										<ResponsiveContainer width="100%" height={250}>
-											<ScatterChart>
-												<CartesianGrid
-													stroke={token.colorBorderSecondary}
-													strokeDasharray="3 3"
-												/>
-												<XAxis
-													type="number"
-													dataKey="complexity"
-													name="Complexity"
-													domain={[0, 100]}
-													stroke={token.colorTextSecondary}
-												/>
-												<YAxis
-													type="number"
-													dataKey="sentiment"
-													name="Sentiment"
-													domain={[-1, 1]}
-													stroke={token.colorTextSecondary}
-												/>
-												<ZAxis
-													type="number"
-													dataKey="duration"
-													range={[40, 280]}
-												/>
-												<Tooltip
-													cursor={{ strokeDasharray: "4 4" }}
-													contentStyle={{
-														...tooltipStyle,
-														background: token.colorBgElevated,
-														color: token.colorText,
-													}}
-												/>
-												<Scatter
-													data={filteredSceneAnalytics}
-													fill={token.colorPrimary}
-													name="Scenes"
-												/>
-											</ScatterChart>
-										</ResponsiveContainer>
-									</Card>
-								</Col>
+				<Col xs={24}>
+					<Card
+						title="Cast Influence and Production Load"
+						style={chartCardStyle(token)}
+					>
+						<ResponsiveContainer width="100%" height={280}>
+							<BarChart
+								data={characterAnalytics.slice(0, 10)}
+								margin={{ top: 10, right: 20, left: 0, bottom: 42 }}
+								onClick={(payload) => {
+									if (payload?.activePayload?.[0]?.payload?.id) {
+										setSelectedCharacterId(payload.activePayload[0].payload.id);
+									}
+								}}
+							>
+								<CartesianGrid
+									stroke={token.colorBorderSecondary}
+									strokeDasharray="3 3"
+								/>
+								<XAxis
+									dataKey="name"
+									stroke={token.colorTextSecondary}
+									tick={chartTick}
+									interval={0}
+									angle={-22}
+									textAnchor="end"
+									height={86}
+								/>
+								<YAxis
+									yAxisId="left"
+									stroke={token.colorTextSecondary}
+									tick={chartTick}
+									domain={[0, 100]}
+								/>
+								<YAxis
+									yAxisId="right"
+									orientation="right"
+									stroke={token.colorTextSecondary}
+									tick={chartTick}
+								/>
+								<Tooltip {...tooltipProps} />
+								<Legend {...legendProps} />
+								<Bar
+									yAxisId="left"
+									dataKey="influence"
+									fill={token.colorSuccess}
+									name="Influence"
+									radius={[6, 6, 0, 0]}
+								/>
+								<Line
+									yAxisId="right"
+									dataKey="productionLoad"
+									stroke={token.colorWarning}
+									strokeWidth={2}
+									name="Production Load"
+								/>
+							</BarChart>
+						</ResponsiveContainer>
+					</Card>
+				</Col>
 
-								{selectedCharacterId && (
-									<Col xs={24}>
-										<Card
-											title={`Character Presence Timeline: ${selectedCharacterId}`}
-											style={chartCardStyle(token)}
-										>
-											<ResponsiveContainer width="100%" height={250}>
-												<AreaChart data={selectedCharacterTimeline}>
-													<CartesianGrid
-														stroke={token.colorBorderSecondary}
-														strokeDasharray="3 3"
-													/>
-													<XAxis
-														dataKey="scene"
-														stroke={token.colorTextSecondary}
-													/>
-													<YAxis stroke={token.colorTextSecondary} />
-													<Tooltip
-														contentStyle={{
-															...tooltipStyle,
-															background: token.colorBgElevated,
-															color: token.colorText,
-														}}
-													/>
-													<Legend />
-													<Area
-														type="monotone"
-														dataKey="dialogue"
-														fill={token.colorPrimary}
-														stroke={token.colorPrimary}
-														name="Dialogue Lines"
-														fillOpacity={0.35}
-													/>
-													<Line
-														type="monotone"
-														dataKey="presence"
-														stroke={token.colorSuccess}
-														name="Presence"
-													/>
-												</AreaChart>
-											</ResponsiveContainer>
-										</Card>
-									</Col>
-								)}
-							</Row>
-						),
-					},
-					{
-						key: "author",
-						label: (
-							<Space>
-								<LineChartOutlined />
-								Author Lens
-							</Space>
-						),
-						children: (
-							<Row gutter={[12, 12]}>
-								<Col xs={24} xl={14}>
-									<Card
-										title="Narrative Flow: Pacing and Sentiment"
-										style={chartCardStyle(token)}
-									>
-										<ResponsiveContainer width="100%" height={250}>
-											<ComposedChart data={sceneAnalytics}>
-												<CartesianGrid
-													stroke={token.colorBorderSecondary}
-													strokeDasharray="3 3"
-												/>
-												<XAxis
-													dataKey="shortName"
-													stroke={token.colorTextSecondary}
-												/>
-												<YAxis
-													yAxisId="left"
-													stroke={token.colorTextSecondary}
-													domain={[0, 100]}
-												/>
-												<YAxis
-													yAxisId="right"
-													orientation="right"
-													stroke={token.colorTextSecondary}
-													domain={[-1, 1]}
-												/>
-												<Tooltip
-													contentStyle={{
-														...tooltipStyle,
-														background: token.colorBgElevated,
-														color: token.colorText,
-													}}
-												/>
-												<Legend />
-												<Bar
-													yAxisId="left"
-													dataKey="actionRatio"
-													fill={token.colorInfo}
-													name="Action Ratio"
-													radius={[5, 5, 0, 0]}
-												/>
-												<Line
-													yAxisId="left"
-													type="monotone"
-													dataKey="pacing"
-													stroke={token.colorPrimary}
-													strokeWidth={2}
-													name="Pacing"
-												/>
-												<Line
-													yAxisId="right"
-													type="monotone"
-													dataKey="sentiment"
-													stroke={token.colorError}
-													strokeWidth={2}
-													name="Sentiment"
-													dot={{ r: 2 }}
-												/>
-											</ComposedChart>
-										</ResponsiveContainer>
-									</Card>
-								</Col>
+				<Col xs={24}>
+					<Card
+						style={{
+							border: `1px solid ${token.colorBorderSecondary}`,
+							background: `linear-gradient(120deg, ${token.colorBgElevated} 0%, ${token.colorFillTertiary} 100%)`,
+						}}
+					>
+						<Space direction="vertical" style={{ width: "100%" }}>
+							<Text type="secondary">Focus Character</Text>
+							<Select
+								placeholder="Select character"
+								value={selectedCharacterId}
+								onChange={setSelectedCharacterId}
+								options={characterAnalytics.map((character) => ({
+									value: character.id,
+									label: character.name,
+								}))}
+							/>
+						</Space>
+					</Card>
+				</Col>
 
-								<Col xs={24} xl={10}>
-									<Card title="Beat Distribution" style={chartCardStyle(token)}>
-										<ResponsiveContainer width="100%" height={250}>
-											<BarChart data={structuralBeatDataset}>
-												<CartesianGrid
-													stroke={token.colorBorderSecondary}
-													strokeDasharray="3 3"
-												/>
-												<XAxis
-													dataKey="name"
-													stroke={token.colorTextSecondary}
-												/>
-												<YAxis
-													stroke={token.colorTextSecondary}
-													allowDecimals={false}
-												/>
-												<Tooltip
-													contentStyle={{
-														...tooltipStyle,
-														background: token.colorBgElevated,
-														color: token.colorText,
-													}}
-												/>
-												<Bar
-													dataKey="value"
-													fill={token.colorWarning}
-													radius={[6, 6, 0, 0]}
-												/>
-											</BarChart>
-										</ResponsiveContainer>
-									</Card>
-								</Col>
+				<Col xs={24}>
+					<Card
+						title={`Character Presence Timeline${
+							activeCharacter ? `: ${activeCharacter.name}` : ""
+						}`}
+						style={chartCardStyle(token)}
+					>
+						{selectedCharacterId ? (
+							<ResponsiveContainer width="100%" height={280}>
+								<AreaChart
+									data={selectedCharacterTimeline}
+									margin={{ top: 10, right: 20, left: 0, bottom: 8 }}
+								>
+									<CartesianGrid
+										stroke={token.colorBorderSecondary}
+										strokeDasharray="3 3"
+									/>
+									<XAxis
+										dataKey="scene"
+										stroke={token.colorTextSecondary}
+										tick={chartTick}
+									/>
+									<YAxis stroke={token.colorTextSecondary} tick={chartTick} />
+									<Tooltip {...tooltipProps} />
+									<Legend {...legendProps} />
+									<Area
+										type="monotone"
+										dataKey="dialogue"
+										fill={token.colorPrimary}
+										stroke={token.colorPrimary}
+										name="Dialogue Lines"
+										fillOpacity={0.35}
+									/>
+									<Line
+										type="monotone"
+										dataKey="presence"
+										stroke={token.colorSuccess}
+										name="Presence"
+									/>
+								</AreaChart>
+							</ResponsiveContainer>
+						) : (
+							<Empty
+								image={Empty.PRESENTED_IMAGE_SIMPLE}
+								description="Select a character to see timeline"
+							/>
+						)}
+					</Card>
+				</Col>
+			</Row>
 
-								<Col xs={24} xl={12}>
-									<Card title="Dialogue Share" style={chartCardStyle(token)}>
-										<ResponsiveContainer width="100%" height={250}>
-											<BarChart
-												data={characterAnalytics.slice(0, 10)}
-												onClick={(payload) => {
-													if (payload?.activePayload?.[0]?.payload?.id) {
-														setSelectedCharacterId(
-															payload.activePayload[0].payload.id,
-														);
-													}
-												}}
-											>
-												<CartesianGrid
-													stroke={token.colorBorderSecondary}
-													strokeDasharray="3 3"
-												/>
-												<XAxis
-													dataKey="name"
-													stroke={token.colorTextSecondary}
-													interval={0}
-													angle={-20}
-													textAnchor="end"
-													height={70}
-												/>
-												<YAxis stroke={token.colorTextSecondary} />
-												<Tooltip
-													contentStyle={{
-														...tooltipStyle,
-														background: token.colorBgElevated,
-														color: token.colorText,
-													}}
-												/>
-												<Bar
-													dataKey="dialogueCount"
-													fill={token.colorPrimary}
-													radius={[6, 6, 0, 0]}
-												/>
-											</BarChart>
-										</ResponsiveContainer>
-									</Card>
-								</Col>
+			<Space
+				size={8}
+				align="center"
+				style={{ width: "100%", marginBottom: 10 }}
+			>
+				<LineChartOutlined style={{ color: token.colorPrimary }} />
+				<Title level={5} style={{ margin: 0 }}>
+					Author Lens
+				</Title>
+			</Space>
 
-								<Col xs={24} xl={12}>
-									<Card
-										title="Character Emotion Palette"
-										style={chartCardStyle(token)}
-									>
-										<ResponsiveContainer width="100%" height={250}>
-											<PieChart>
-												<Pie
-													data={emotionalDistribution}
-													dataKey="value"
-													nameKey="name"
-													innerRadius={50}
-													outerRadius={95}
-												>
-													{emotionalDistribution.map((item) => (
-														<Cell key={item.name} fill={item.color} />
-													))}
-												</Pie>
-												<Tooltip
-													contentStyle={{
-														...tooltipStyle,
-														background: token.colorBgElevated,
-														color: token.colorText,
-													}}
-												/>
-												<Legend />
-											</PieChart>
-										</ResponsiveContainer>
-									</Card>
-								</Col>
-							</Row>
-						),
-					},
-				]}
-			/>
+			<Row gutter={[12, 12]} style={{ marginBottom: 14 }}>
+				<Col xs={24}>
+					<Card title="Narrative Action Flow" style={chartCardStyle(token)}>
+						<ResponsiveContainer width="100%" height={280}>
+							<BarChart
+								data={sceneAnalytics}
+								margin={{ top: 10, right: 18, left: 4, bottom: 18 }}
+							>
+								<CartesianGrid
+									stroke={token.colorBorderSecondary}
+									strokeDasharray="3 3"
+								/>
+								<XAxis
+									dataKey="shortName"
+									stroke={token.colorTextSecondary}
+									tick={chartTick}
+								/>
+								<YAxis
+									stroke={token.colorTextSecondary}
+									tick={chartTick}
+									domain={[0, 100]}
+								/>
+								<Tooltip {...tooltipProps} />
+								<Legend {...legendProps} />
+								<Bar
+									dataKey="actionRatio"
+									fill={token.colorInfo}
+									name="Action Ratio"
+									radius={[5, 5, 0, 0]}
+								/>
+							</BarChart>
+						</ResponsiveContainer>
+					</Card>
+				</Col>
+
+				<Col xs={24}>
+					<Card title="Narrative Pacing Flow" style={chartCardStyle(token)}>
+						<ResponsiveContainer width="100%" height={280}>
+							<ComposedChart
+								data={sceneAnalytics}
+								margin={{ top: 10, right: 18, left: 4, bottom: 18 }}
+							>
+								<CartesianGrid
+									stroke={token.colorBorderSecondary}
+									strokeDasharray="3 3"
+								/>
+								<XAxis
+									dataKey="shortName"
+									stroke={token.colorTextSecondary}
+									tick={chartTick}
+								/>
+								<YAxis
+									stroke={token.colorTextSecondary}
+									tick={chartTick}
+									domain={[0, 100]}
+								/>
+								<Tooltip {...tooltipProps} />
+								<Legend {...legendProps} />
+								<Line
+									type="monotone"
+									dataKey="pacing"
+									stroke={token.colorPrimary}
+									strokeWidth={2}
+									name="Pacing"
+								/>
+							</ComposedChart>
+						</ResponsiveContainer>
+					</Card>
+				</Col>
+
+				<Col xs={24}>
+					<Card title="Dialogue Share" style={chartCardStyle(token)}>
+						<ResponsiveContainer width="100%" height={280}>
+							<BarChart
+								data={characterAnalytics.slice(0, 10)}
+								margin={{ top: 10, right: 20, left: 0, bottom: 42 }}
+								onClick={(payload) => {
+									if (payload?.activePayload?.[0]?.payload?.id) {
+										setSelectedCharacterId(payload.activePayload[0].payload.id);
+									}
+								}}
+							>
+								<CartesianGrid
+									stroke={token.colorBorderSecondary}
+									strokeDasharray="3 3"
+								/>
+								<XAxis
+									dataKey="name"
+									stroke={token.colorTextSecondary}
+									tick={chartTick}
+									interval={0}
+									angle={-22}
+									textAnchor="end"
+									height={86}
+								/>
+								<YAxis stroke={token.colorTextSecondary} tick={chartTick} />
+								<Tooltip {...tooltipProps} />
+								<Bar
+									dataKey="dialogueCount"
+									fill={token.colorPrimary}
+									radius={[6, 6, 0, 0]}
+								/>
+							</BarChart>
+						</ResponsiveContainer>
+					</Card>
+				</Col>
+			</Row>
+
+			<Card
+				style={{
+					marginTop: 14,
+					marginBottom: 14,
+					border: `1px solid ${token.colorBorderSecondary}`,
+					background: `linear-gradient(120deg, ${token.colorBgElevated} 0%, ${token.colorFillTertiary} 100%)`,
+				}}
+			>
+				<Space direction="vertical" style={{ width: "100%" }}>
+					<Text type="secondary">Focus Scene</Text>
+					<Select
+						placeholder="Select scene"
+						value={selectedSceneId}
+						onChange={setSelectedSceneId}
+						options={sceneAnalytics.map((scene) => ({
+							value: scene.id,
+							label: `${scene.shortName} ${scene.name}`,
+						}))}
+					/>
+				</Space>
+			</Card>
 
 			{activeScene && (
 				<Card
@@ -1184,13 +912,6 @@ export const StoryAnalytics = ({ provider }) => {
 							<Statistic
 								title="Complexity"
 								value={activeScene.complexity}
-								suffix="/100"
-							/>
-						</Col>
-						<Col xs={12} md={4}>
-							<Statistic
-								title="Risk"
-								value={activeScene.riskScore}
 								suffix="/100"
 							/>
 						</Col>
